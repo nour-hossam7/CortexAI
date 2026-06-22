@@ -1,1 +1,14 @@
+venv/
+__pycache__/
+.ipynb_checkpoints/
 
+*.pth
+*.pt
+*.h5
+
+*.nii
+*.nii.gz
+
+datasets/
+
+.DS_Store
