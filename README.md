@@ -26,25 +26,6 @@ Cortex AI addresses this challenge by integrating medical imaging data and textu
 - Support clinicians with AI-assisted decision-making.
 
 ---
-## Dataset Setup
-
-CortexAI uses a multimodal medical dataset structure with separate raw and processed folders for computer vision, NLP, and fusion workflows.
-
-### Dataset Directory Structure
-
-```bash
-datasets/
-├── raw/
-│   ├── brats2020/
-│   └── textbrats/
-│
-├── processed/
-│   ├── cv/
-│   ├── nlp/
-│   └── fusion/
-│
-└── sample_data/
-
 # 🚀 Key Features
 
 ### 🖼️ MRI Analysis
@@ -222,6 +203,64 @@ Phase 5:
 - Deployment & Evaluation
 
 ---
+## Dataset Setup
+
+CortexAI uses a multimodal medical dataset structure with separate raw and processed folders for computer vision, NLP, and fusion workflows.
+
+### Dataset Directory Structure
+
+```bash
+datasets/
+├── raw/
+│   ├── brats2020/
+│   └── textbrats/
+│
+├── processed/
+│   ├── cv/
+│   ├── nlp/
+│   └── fusion/
+│
+└── sample_data/
+Raw Datasets
+1) BraTS2020
+
+This folder stores the raw MRI / segmentation data used by the Computer Vision module.
+
+Expected location:
+
+datasets/raw/brats2020/
+2) TextBraTS
+
+This folder stores the text-based reports / text features used by the NLP and Fusion modules.
+
+Expected location:
+
+datasets/raw/textbrats/
+Team Setup Instructions
+
+After cloning the repository, each team member should:
+
+1. Install dependencies
+pip install -r requirements.txt
+2. Download the required datasets
+BraTS2020 → place inside datasets/raw/brats2020/
+TextBraTS → place inside datasets/raw/textbrats/
+3. Run the dataset setup check
+python src/utils/setup_data.py
+
+This script will:
+
+create any missing required folders
+verify whether BraTS2020 data exists
+verify whether TextBraTS data exists
+confirm that processed directories are ready
+Notes
+Raw medical data is not uploaded to GitHub due to size and storage constraints.
+Team members should keep the same folder structure locally.
+Processed outputs should be stored inside:
+datasets/processed/cv/
+datasets/processed/nlp/
+datasets/processed/fusion/
 
 # 📜 License
 
