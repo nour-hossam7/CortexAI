@@ -26,6 +26,24 @@ Cortex AI addresses this challenge by integrating medical imaging data and textu
 - Support clinicians with AI-assisted decision-making.
 
 ---
+## Dataset Setup
+
+CortexAI uses a multimodal medical dataset structure with separate raw and processed folders for computer vision, NLP, and fusion workflows.
+
+### Dataset Directory Structure
+
+```bash
+datasets/
+├── raw/
+│   ├── brats2020/
+│   └── textbrats/
+│
+├── processed/
+│   ├── cv/
+│   ├── nlp/
+│   └── fusion/
+│
+└── sample_data/
 
 # 🚀 Key Features
 
