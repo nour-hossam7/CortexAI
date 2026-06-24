@@ -1,14 +1,50 @@
+# =========================
+# Python / environment / cache
+# =========================
 venv/
+.venv/
 __pycache__/
 .ipynb_checkpoints/
+.DS_Store
 
+# =========================
+# Model checkpoints / weights
+# =========================
 *.pth
 *.pt
 *.h5
+*.ckpt
 
+# =========================
+# Medical imaging files
+# =========================
 *.nii
 *.nii.gz
 
-datasets/
+# =========================
+# Ignore heavy raw dataset contents
+# =========================
+datasets/raw/brats2020/*
+datasets/raw/textbrats/*
 
-.DS_Store
+# Keep raw folder placeholders
+!datasets/raw/brats2020/.gitkeep
+!datasets/raw/textbrats/.gitkeep
+
+# =========================
+# Ignore processed outputs
+# =========================
+datasets/processed/cv/*
+datasets/processed/nlp/*
+datasets/processed/fusion/*
+
+# Keep processed folder placeholders
+!datasets/processed/cv/.gitkeep
+!datasets/processed/nlp/.gitkeep
+!datasets/processed/fusion/.gitkeep
+
+# =========================
+# Sample data
+# =========================
+datasets/sample_data/*
+!datasets/sample_data/.gitkeep
