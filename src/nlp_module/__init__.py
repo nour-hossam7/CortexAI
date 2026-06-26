@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .logger import configure_logging, get_logger
 from .config import (
     BIOBERT_MODEL_NAME,
     CLINICALBERT_MODEL_NAME,
@@ -58,6 +59,8 @@ __all__ = [
     "TransformerTextTokenizer",
     "ValidationReport",
     "build_config",
+    "configure_logging",
+    "get_logger",
     "extract_embeddings",
     "extract_features_for_fusion",
     "get_feature_dimension",

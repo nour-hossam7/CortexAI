@@ -166,10 +166,18 @@ class TransformerEmbedder:
 
         model_name = self.config.resolved_model_name()
         self.logger.info("Loading embedding model: %s on %s", model_name, self.device)
-        return AutoModel.from_pretrained(
-            model_name,
-            local_files_only=self.config.local_files_only,
-        )
+        try:
+            return AutoModel.from_pretrained(
+                model_name,
+                local_files_only=self.config.local_files_only,
+            )
+        except OSError as exc:
+            raise OSError(
+                f"Failed to load embedding model '{model_name}'. "
+                "Verify network access to Hugging Face, install CA certificates, "
+                "or set model_name to a local model directory and use "
+                "local_files_only=True when models are cached offline."
+            ) from exc
 
 
 def extract_embeddings(

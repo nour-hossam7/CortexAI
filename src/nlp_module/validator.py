@@ -223,7 +223,7 @@ def merge_validation_reports(*reports: ValidationReport) -> ValidationReport:
     """Merge multiple validation reports into a single report."""
     merged = ValidationReport()
     for report in reports:
-        merged.record_count += report.record_count
+        merged.record_count = max(merged.record_count, report.record_count)
         merged.empty_text_count += report.empty_text_count
         merged.duplicate_id_count += report.duplicate_id_count
         merged.missing_id_count += report.missing_id_count

@@ -165,10 +165,18 @@ class TransformerTextTokenizer:
 
         tokenizer_name = self.config.resolved_tokenizer_name()
         self.logger.info("Loading tokenizer: %s", tokenizer_name)
-        return AutoTokenizer.from_pretrained(
-            tokenizer_name,
-            local_files_only=self.config.local_files_only,
-        )
+        try:
+            return AutoTokenizer.from_pretrained(
+                tokenizer_name,
+                local_files_only=self.config.local_files_only,
+            )
+        except OSError as exc:
+            raise OSError(
+                f"Failed to load tokenizer '{tokenizer_name}'. "
+                "Verify network access to Hugging Face, install CA certificates, "
+                "or set model_name/tokenizer_name to a local model directory and "
+                "use local_files_only=True when models are cached offline."
+            ) from exc
 
 
 def tokenize_reports(
