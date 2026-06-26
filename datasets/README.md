@@ -23,7 +23,7 @@ https://www.kaggle.com/datasets/awsaf49/brats2020-training-data
 
 **TextBraTS**
 
-https://www.kaggle.com/datasets/alejopaullier/textbrats
+https://github.com/Jupitern52/TextBraTS
 
 ---
 
