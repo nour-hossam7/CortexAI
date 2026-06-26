@@ -4,7 +4,7 @@ This folder contains the dataset structure for **CortexAI**.
 
 The project uses two raw datasets:
 
-- **BraTS2020** → for MRI image analysis / segmentation
+- **BraTS2020 Training Data (Kaggle)** → for MRI image analysis / segmentation
 - **TextBraTS** → for radiology-style text reports / multimodal text support
 
 ---
