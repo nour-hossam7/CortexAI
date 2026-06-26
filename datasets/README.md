@@ -347,3 +347,15 @@ Maintaining the same directory structure across all team members ensures that ev
 
 If you change folder names or locations, the project modules may fail to locate the required datasets.
 
+## Important for Team Members
+
+Do **NOT** upload the raw datasets to GitHub.
+
+Only the folder structure is tracked in the repository using `.gitkeep` files.
+
+Each team member must download the datasets locally using the links above and place them inside:
+
+datasets/raw/brats2020/
+
+datasets/raw/textbrats/
+
