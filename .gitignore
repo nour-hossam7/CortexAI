@@ -43,6 +43,11 @@ datasets/processed/fusion/*
 !datasets/processed/nlp/.gitkeep
 !datasets/processed/fusion/.gitkeep
 
+# Keep small metadata files needed by the CV pipeline code
+# (the actual .pt volumes stay ignored — shared via Kaggle instead)
+!datasets/processed/cv/dataset_split.json
+!datasets/processed/cv/index.json
+
 # =========================
 # Sample data
 # =========================
