@@ -16,6 +16,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
@@ -23,31 +25,30 @@ from torch.amp import GradScaler
 from torch.utils.data import DataLoader
 
 from .config import FusionConfig
-from .dataset import get_fusion_dataloaders
-from .fusion_model import FusionModel, build_fusion_model
+from .dataset import FusionDataset, load_fusion_split
+from .fusion_model import ClinicalDecisionModel, build_model
+from .train import assign_labels, compute_thresholds, get_clinical_columns, make_loader, scale_clinical
 
 __all__ = ["train_fusion"]
 
+SPLITS = ("train", "validation", "test")
 
-# ── Metrics ───────────────────────────────────────────────────────────────────
 
 def _accuracy(logits: torch.Tensor, labels: torch.Tensor) -> float:
     preds = logits.argmax(dim=1)
     return (preds == labels).float().mean().item()
 
 
-# ── Checkpoint ────────────────────────────────────────────────────────────────
-
 def save_checkpoint(
     epoch:      int,
-    model:      FusionModel,
+    model:      ClinicalDecisionModel,
     optimizer:  torch.optim.Optimizer,
     scaler:     GradScaler,
     best_acc:   float,
     config:     FusionConfig,
 ) -> None:
-    config.CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
-    path = config.CHECKPOINT_DIR / "best_fusion.pth"
+    config.MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    path = config.MODEL_DIR / "best_fusion.pth"
     torch.save(
         {
             "epoch":           epoch,
@@ -62,13 +63,13 @@ def save_checkpoint(
 
 
 def load_checkpoint(
-    model:     FusionModel,
+    model:     ClinicalDecisionModel,
     optimizer: torch.optim.Optimizer,
     scaler:    GradScaler,
     device:    torch.device,
     config:    FusionConfig,
 ) -> tuple[int, float]:
-    path = config.CHECKPOINT_DIR / "best_fusion.pth"
+    path = config.MODEL_DIR / "best_fusion.pth"
     if not path.exists():
         return 0, 0.0
     ckpt = torch.load(path, map_location=device, weights_only=False)
@@ -79,25 +80,23 @@ def load_checkpoint(
     return ckpt["epoch"] + 1, ckpt["best_acc"]
 
 
-# ── One epoch ─────────────────────────────────────────────────────────────────
-
 def train_one_epoch(
-    model:         FusionModel,
+    model:         ClinicalDecisionModel,
     loader:        DataLoader,
     optimizer:     torch.optim.Optimizer,
     loss_fn:       nn.Module,
     scaler:        GradScaler,
     device:        torch.device,
 ) -> tuple[float, float]:
-    """Returns (mean_loss, accuracy)."""
     model.train()
     total_loss = 0.0
     total_acc  = 0.0
     n_batches  = 0
 
     for batch in loader:
-        img  = batch["image_features"].to(device)
-        txt  = batch["text_features"].to(device)
+        img  = batch["image"].to(device)
+        txt  = batch["text"].to(device)
+        clin = batch["clinical"].to(device)
         lbl  = batch["label"].to(device)
 
         optimizer.zero_grad(set_to_none=True)
@@ -106,7 +105,7 @@ def train_one_epoch(
             device_type=device.type,
             enabled=device.type == "cuda",
         ):
-            logits = model(img, txt)
+            logits, _ = model(img, txt, clin)
             loss   = loss_fn(logits, lbl)
 
         scaler.scale(loss).backward()
@@ -121,12 +120,11 @@ def train_one_epoch(
 
 
 def validate_one_epoch(
-    model:   FusionModel,
+    model:   ClinicalDecisionModel,
     loader:  DataLoader,
     loss_fn: nn.Module,
     device:  torch.device,
 ) -> tuple[float, float]:
-    """Returns (mean_loss, accuracy)."""
     model.eval()
     total_loss = 0.0
     total_acc  = 0.0
@@ -134,11 +132,12 @@ def validate_one_epoch(
 
     with torch.no_grad():
         for batch in loader:
-            img  = batch["image_features"].to(device)
-            txt  = batch["text_features"].to(device)
+            img  = batch["image"].to(device)
+            txt  = batch["text"].to(device)
+            clin = batch["clinical"].to(device)
             lbl  = batch["label"].to(device)
 
-            logits = model(img, txt)
+            logits, _ = model(img, txt, clin)
             loss   = loss_fn(logits, lbl)
 
             total_loss += loss.item()
@@ -148,42 +147,90 @@ def validate_one_epoch(
     return total_loss / max(n_batches, 1), total_acc / max(n_batches, 1)
 
 
-# ── Main train loop ───────────────────────────────────────────────────────────
-
 def train_fusion(config: FusionConfig | None = None) -> None:
-    """
-    Full training pipeline for the fusion module.
-
-    Steps:
-        1. Build model, optimizer, loss, dataloaders
-        2. Resume from checkpoint if available
-        3. Train + validate for NUM_EPOCHS
-        4. Save best checkpoint by validation accuracy
-        5. Log epoch results and save history JSON
-
-    Output
-    ------
-    Best model saved to:
-        models/fusion/best_fusion.pth
-    Training history saved to:
-        models/fusion/training_history.json
-    """
     cfg = config or FusionConfig()
 
-    torch.manual_seed(cfg.SEED)
+    torch.manual_seed(42)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    # ── Data ──────────────────────────────────────────────────────────────────
-    print("Loading fusion features...")
-    train_loader, val_loader, _ = get_fusion_dataloaders(cfg)
-    print(f"  Train batches : {len(train_loader)}")
-    print(f"  Val batches   : {len(val_loader)}")
+    cfg.MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    cfg.REPR_DIR.mkdir(parents=True, exist_ok=True)
 
-    # ── Model ─────────────────────────────────────────────────────────────────
-    model   = build_fusion_model(cfg).to(device)
-    loss_fn = nn.CrossEntropyLoss()
+    print("\nLoading fusion features...")
+    splits_data: dict = {}
+    for split in SPLITS:
+        fusion   = load_fusion_split(cfg.fusion_dir, split)
+        clinical = pd.read_csv(cfg.CLINICAL_DIR / f"{split}_clinical_features.csv")
+        splits_data[split] = {
+            "image":    fusion["image_features"],
+            "text":     fusion["text_features"],
+            "clinical": clinical,
+        }
+        print(f"  {split:12}  image {fusion['image_features'].shape}  "
+              f"text {fusion['text_features'].shape}  clinical {clinical.shape}")
+
+    thresholds = compute_thresholds(splits_data["train"]["clinical"], cfg)
+    print(f"\nThresholds (from train): {thresholds}")
+
+    (cfg.MODEL_DIR / "severity_thresholds.json").write_text(
+        json.dumps(thresholds, indent=4)
+    )
+
+    for split in SPLITS:
+        splits_data[split]["clinical"] = assign_labels(
+            splits_data[split]["clinical"], thresholds, cfg
+        )
+
+    for split in SPLITS:
+        vc = splits_data[split]["clinical"]["risk_label"].value_counts().sort_index()
+        print(f"  {split:12}  Low={vc.get(0,0)}  Medium={vc.get(1,0)}  High={vc.get(2,0)}")
+
+    clinical_columns = get_clinical_columns(
+        splits_data["train"]["clinical"],
+        cfg.CLINICAL_COLUMN_CANDIDATES,
+    )
+    print(f"\nClinical columns ({len(clinical_columns)}): {clinical_columns}")
+
+    (
+        splits_data["train"]["clinical"],
+        splits_data["validation"]["clinical"],
+        splits_data["test"]["clinical"],
+        _,
+    ) = scale_clinical(
+        splits_data["train"]["clinical"],
+        splits_data["validation"]["clinical"],
+        splits_data["test"]["clinical"],
+        clinical_columns,
+        cfg.MODEL_DIR,
+    )
+
+    loaders = {
+        split: make_loader(
+            image    = splits_data[split]["image"],
+            text     = splits_data[split]["text"],
+            clinical = splits_data[split]["clinical"],
+            clinical_columns = clinical_columns,
+            batch_size = cfg.BATCH_SIZE,
+            shuffle    = (split == "train"),
+        )
+        for split in SPLITS
+    }
+
+    clinical_dim = len(clinical_columns)
+    model   = build_model(clinical_dim).to(device)
+    total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"\nModel: ClinicalDecisionModel  trainable params: {total_params:,}")
+
+    train_labels  = splits_data["train"]["clinical"]["risk_label"].values
+    class_counts  = np.bincount(train_labels)
+    class_weights = torch.tensor(
+        len(train_labels) / (len(class_counts) * class_counts),
+        dtype=torch.float32,
+    ).to(device)
+
+    loss_fn = nn.CrossEntropyLoss(weight=class_weights)
     optimizer = AdamW(
         model.parameters(),
         lr=cfg.LEARNING_RATE,
@@ -191,10 +238,8 @@ def train_fusion(config: FusionConfig | None = None) -> None:
     )
     scaler = GradScaler(device.type)
 
-    # ── Resume ────────────────────────────────────────────────────────────────
     start_epoch, best_acc = load_checkpoint(model, optimizer, scaler, device, cfg)
 
-    # ── Training loop ─────────────────────────────────────────────────────────
     history: list[dict] = []
 
     print(f"\nStarting fusion training from epoch {start_epoch + 1} / {cfg.NUM_EPOCHS}")
@@ -203,11 +248,11 @@ def train_fusion(config: FusionConfig | None = None) -> None:
     for epoch in range(start_epoch, cfg.NUM_EPOCHS):
 
         train_loss, train_acc = train_one_epoch(
-            model, train_loader, optimizer, loss_fn, scaler, device
+            model, loaders["train"], optimizer, loss_fn, scaler, device
         )
 
         val_loss, val_acc = validate_one_epoch(
-            model, val_loader, loss_fn, device
+            model, loaders["validation"], loss_fn, device
         )
 
         saved = ""
@@ -234,9 +279,8 @@ def train_fusion(config: FusionConfig | None = None) -> None:
     print("-" * 72)
     print(f"Training complete. Best Val Acc: {best_acc:.4f}")
 
-    # ── Save history ──────────────────────────────────────────────────────────
-    cfg.CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
-    history_path = cfg.CHECKPOINT_DIR / "training_history.json"
+    cfg.MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    history_path = cfg.MODEL_DIR / "training_history.json"
     with open(history_path, "w", encoding="utf-8") as f:
         json.dump(history, f, indent=2)
     print(f"History saved → {history_path}")

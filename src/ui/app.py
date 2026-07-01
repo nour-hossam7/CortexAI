@@ -76,7 +76,7 @@ for f in features:
     st.markdown(f"- {f}")
 
 st.markdown("---")
-if st.button("🚀 Start Analysis — MRI Workstation", type="primary", width='stretch'):
+if st.button("🚀 Start Analysis — MRI Workstation", type="primary", use_container_width=True):
     st.switch_page("pages/1_MRI_Analysis.py")
 
 if not paths.segresnet_checkpoint.exists():

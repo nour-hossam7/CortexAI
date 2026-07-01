@@ -40,7 +40,7 @@ def set_device() -> torch.device:
 
 def build_encoder(
     model_name: str | None = None,
-) -> Tuple[AutoTokenizer, AutoModel, torch.device]:
+) -> Tuple[BertTokenizer, BertModel, torch.device]:
     """
     Load a frozen pretrained encoder and its tokenizer.
 
