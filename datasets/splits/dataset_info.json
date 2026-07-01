@@ -1,0 +1,31 @@
+{
+    "dataset": "BraTS2020",
+    "version": "1.0",
+    "created_at": "2026-06-27T21:04:11.639892",
+    "patients": {
+        "train": 257,
+        "validation": 56,
+        "test": 56,
+        "total": 369
+    },
+    "modalities": [
+        "FLAIR",
+        "T1",
+        "T1ce",
+        "T2"
+    ],
+    "classes": {
+        "0": "Background",
+        "1": "NCR/NET",
+        "2": "Edema",
+        "3": "Enhancing Tumor"
+    },
+    "preprocessing": [
+        "Load",
+        "EnsureChannelFirst",
+        "MapLabel",
+        "CropForeground",
+        "ScaleIntensityRangePercentiles",
+        "NormalizeIntensity"
+    ]
+}

@@ -13,6 +13,7 @@ Mariam Mohamed
 """
 
 from pathlib import Path
+from typing import Dict, List
 
 import torch
 
@@ -20,9 +21,12 @@ from monai.inferers import SlidingWindowInferer
 
 from .config import Config
 from .model import build_model
+from .preprocessing import get_inference_transforms
 
 __all__ = [
     "load_model",
+    "build_inference_sample",
+    "predict_mri",
     "predict_mask",
     "calculate_tumor_volume",
     "extract_image_features",
@@ -79,6 +83,94 @@ def load_model(
     model.eval()
 
     return model
+
+def build_inference_sample(
+    image_paths: List[str] | Dict[str, str],
+) -> Dict[str, torch.Tensor]:
+    """
+    Build a preprocessed sample dict from raw MRI files for a brand-new
+    patient — i.e. one that was never run through Notebook 06.5 and has
+    no serialized .pt file in datasets/processed/cv/test/.
+
+    This is the missing link for predict_mri(): it applies
+    get_inference_transforms() (preprocessing.py), which uses
+    CropForegroundd(source_key="image") — the no-label-available variant,
+    matching real deployment conditions exactly. Do NOT substitute
+    get_base_transforms() here; that version crops with source_key="label"
+    and requires a ground-truth mask that a new patient will not have.
+
+    Parameters
+    ----------
+    image_paths : list[str] | dict[str, str]
+        Either a list of 4 file paths in the channel order contract
+        from Notebook 04 — [FLAIR, T1, T1ce, T2] — or a dict keyed by
+        modality name (any subset/order of Config.MODALITIES), e.g.
+        {"flair": "...", "t1": "...", "t1ce": "...", "t2": "..."}.
+
+    Returns
+    -------
+    dict
+        {"image": Tensor (4, D, H, W) float32}
+        Already cropped, intensity-scaled, and normalized — ready for
+        predict_mask() / extract_image_features().
+    """
+
+    if isinstance(image_paths, dict):
+        ordered_paths = [
+            str(image_paths[modality]) for modality in Config.MODALITIES
+        ]
+    else:
+        ordered_paths = [str(path) for path in image_paths]
+
+        if len(ordered_paths) != len(Config.MODALITIES):
+            raise ValueError(
+                f"Expected {len(Config.MODALITIES)} modality paths "
+                f"({Config.MODALITIES}), got {len(ordered_paths)}."
+            )
+
+    transform = get_inference_transforms()
+
+    processed = transform({"image": ordered_paths})
+
+    return {"image": processed["image"].as_tensor()}
+
+
+def predict_mri(
+    model,
+    image_paths: List[str] | Dict[str, str],
+    remap_to_brats: bool = False,
+):
+    """
+    End-to-end prediction for a single new MRI case — the function
+    referenced in the project task list as predict_mri(image_path).
+
+    Loads and preprocesses raw NIfTI files (no precomputed .pt file
+    required), then runs sliding-window inference exactly like
+    predict_mask().
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Loaded SegResNet, in eval() mode (see load_model()).
+    image_paths : list[str] | dict[str, str]
+        Raw modality file paths — see build_inference_sample().
+    remap_to_brats : bool, default False
+        See predict_mask().
+
+    Returns
+    -------
+    torch.Tensor
+        Shape (D, H, W), integer class labels.
+    """
+
+    sample = build_inference_sample(image_paths)
+
+    return predict_mask(
+        model=model,
+        sample=sample,
+        remap_to_brats=remap_to_brats,
+    )
+
 
 def predict_mask(
     model,
@@ -163,7 +255,8 @@ def calculate_tumor_volume(
 
 def extract_image_features(
     model,
-    sample,
+    image,
+    device,
 ):
     """
     Extract encoder bottleneck features for multimodal fusion.
@@ -171,10 +264,16 @@ def extract_image_features(
     Registers a forward hook on the SegResNet encoder's last layer
     (`model.down_layers[-1]`) and global-average-pools its output over
     the spatial dimensions, producing a compact per-patient feature
-    vector. This is the exact approach validated in Notebook 10
-    (Deep Feature Extraction & Embedding Analysis), where it was run
-    on all 56 validation patients and produced a (56, 256) feature
-    matrix used for PCA / t-SNE / cosine-similarity analysis.
+    vector.
+
+    Signature matches Notebook 10 (Deep Feature Extraction & Embedding
+    Analysis) exactly — `(model, image, device)`, where `image` already
+    carries a batch dimension — so code can be copied between this file
+    and the notebook in either direction without a TypeError.
+
+    In the notebook the typical call pattern is:
+        image = sample["image"].unsqueeze(0)   # (1, 4, D, H, W)
+        feat  = extract_image_features(model, image, device)
 
     Does not modify the model or its forward pass — the hook only
     reads the bottleneck activation and is removed before returning.
@@ -182,11 +281,14 @@ def extract_image_features(
     Parameters
     ----------
     model : torch.nn.Module
-        Loaded SegResNet, in eval() mode, already on its target device.
-    sample : dict
-        Must contain "image": Tensor (4, D, H, W) — a preprocessed
-        MRI volume (variable spatial size is fine; it is padded and
-        center-cropped to ROI_SIZE internally).
+        SegResNet, in eval() mode, already on `device`.
+    image : torch.Tensor
+        Shape (1, 4, D, H, W) — preprocessed MRI volume with the batch
+        dimension already added (variable spatial size is fine; padded
+        and center-cropped to ROI_SIZE internally via pad_and_crop_128).
+    device : torch.device
+        Where to run the forward pass. Passed explicitly rather than
+        inferred from model.parameters(), matching Notebook 10 exactly.
 
     Returns
     -------
@@ -194,13 +296,17 @@ def extract_image_features(
         Shape (256,) — bottleneck feature vector for this patient.
         Consumed downstream by the fusion module (Ammar) as the
         per-patient image feature representation.
+
+    See Also
+    --------
+    dataset.load_image_features : load ALL precomputed bottleneck
+        features (saved by Notebook 10) for a full split, indexed by
+        patient_id — the fast path for the fusion module.
     """
 
     import numpy as np
 
     from .preprocessing import pad_and_crop_128
-
-    device = next(model.parameters()).device
 
     captured = {}
 
@@ -210,8 +316,7 @@ def extract_image_features(
 
     hook = model.down_layers[-1].register_forward_hook(_hook)
 
-    image = sample["image"]
-    patch = pad_and_crop_128(image).unsqueeze(0).to(device)  # (1, 4, 128, 128, 128)
+    patch = pad_and_crop_128(image[0]).unsqueeze(0).to(device)  # (1, 4, 128, 128, 128)
 
     model.eval()
 

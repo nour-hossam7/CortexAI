@@ -1,461 +1,355 @@
-# 🧠 Cortex AI
+# CortexAI
 
-# Multimodal Brain Tumor Clinical Decision Support System
+CortexAI is a multimodal brain-tumor clinical decision support system implemented in Python. The project combines MRI-based segmentation, radiology-report NLP, multimodal fusion, and an interactive Streamlit UI to provide a research-oriented workflow for brain-tumor analysis and decision support.
 
-**Graduation Project | Artificial Intelligence | Computer Vision | NLP | Multimodal Learning | Explainable AI**
+![Project banner placeholder](https://via.placeholder.com/1200x320?text=CortexAI)
 
----
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-Enabled-EE4C2C)](https://pytorch.org/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-UI-FF4B4B)](https://streamlit.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## 📖 Overview
+## Table of Contents
 
-Cortex AI is an AI-powered clinical decision support system designed to assist healthcare professionals in brain tumor diagnosis by combining MRI image analysis with radiology report understanding.
+- [Project Overview](#project-overview)
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [Architecture](#architecture)
+- [Folder Structure](#folder-structure)
+- [Technologies Used](#technologies-used)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Models](#models)
+- [Dataset](#dataset)
+- [Workflow](#workflow)
+- [Dependencies](#dependencies)
+- [Error Handling](#error-handling)
+- [Future Improvements](#future-improvements)
+- [Contributing](#contributing)
+- [License](#license)
+- [Authors](#authors)
+- [Acknowledgments](#acknowledgments)
+- [Contact](#contact)
 
-The system integrates **Computer Vision**, **Natural Language Processing (NLP)**, **Multimodal Deep Learning**, and **Explainable AI (XAI)** to generate accurate, interpretable, and clinically meaningful diagnostic insights.
+## Project Overview
 
----
+CortexAI was designed to support brain-tumor analysis by combining complementary information from:
 
-# 📌 Problem Statement
+- MRI volumes for segmentation and feature extraction
+- Radiology report text for clinical-language embedding extraction
+- Clinical-style feature inputs for multimodal fusion prediction
 
-Brain tumor diagnosis depends on multiple sources of information such as MRI scans and radiology reports.
+The repository contains both research-oriented notebooks and reusable Python modules for preprocessing, training, inference, evaluation, and a Streamlit-based interface.
 
-Traditional AI systems usually analyze only one modality, limiting diagnostic performance.
+### Main objectives
 
-Cortex AI solves this problem by combining medical images and clinical text into one multimodal AI system capable of producing more comprehensive and explainable predictions.
+- Perform MRI-based segmentation using a 3D segmentation model
+- Extract image features for downstream fusion
+- Process radiology reports using transformer-based NLP components
+- Fuse image, text, and clinical signals into a risk-style prediction workflow
+- Expose the workflow through a polished Streamlit UI
 
----
+### Intended users
 
-# 🎯 Project Objectives
+- Researchers working on multimodal medical AI
+- Students and teams presenting a graduation or academic project
+- Developers interested in reusing the pipeline for inference and experimentation
 
-- Detect brain tumors from MRI scans
-- Analyze radiology reports using NLP
-- Extract imaging and textual features
-- Fuse both modalities into one prediction model
-- Generate explainable AI outputs
-- Support clinicians with intelligent decision assistance
+## Features
 
----
+- MRI preprocessing and inference support for 3D medical volumes
+- Segmentation inference using a MONAI-based SegResNet checkpoint
+- Image feature extraction for multimodal fusion
+- Radiology report cleaning and embedding extraction with Hugging Face transformers
+- Fusion-model inference combining image, text, and clinical inputs
+- Streamlit-based home, prediction, results, and dashboard interface
+- Dataset verification and setup utilities
+- Evaluation and reporting assets under the reports directory
 
-# 🚀 Key Features
+## Screenshots
 
-## 🖼️ Computer Vision
+The repository does not currently include saved screenshots, so the following placeholders mark the expected UI areas:
 
-- MRI preprocessing
-- Image normalization
-- Brain tumor segmentation
-- Feature extraction
-- Deep learning-based analysis
+- Home page: placeholder for the landing experience
+- Dashboard: placeholder for the project-status overview
+- Prediction page: placeholder for MRI/report intake and inference controls
+- Results page: placeholder for prediction summary and confidence views
+- Analytics: placeholder for evaluation and reporting outputs
+- Reports: placeholder for generated summaries and charts
 
----
+## Architecture
 
-## 📝 Natural Language Processing
+The repository follows a modular pipeline:
 
-- Clinical report preprocessing
-- Medical text cleaning
-- BioBERT embeddings
-- ClinicalBERT embeddings
-- Clinical feature extraction
+1. MRI inputs are preprocessed and passed through the CV segmentation model.
+2. Image features are extracted from the segmentation backbone.
+3. Radiology text is cleaned and transformed into embeddings through the NLP module.
+4. Image features, text features, and clinical inputs are combined by the fusion module.
+5. The UI exposes the workflow for prediction and result presentation.
 
----
-
-## 🔗 Multimodal Fusion
-
-- Image feature fusion
-- Text feature fusion
-- Joint multimodal representation
-- Deep learning classification
-- Brain tumor prediction
-
----
-
-## 🔍 Explainable AI (XAI)
-
-- Grad-CAM visualization
-- SHAP explanations
-- Feature importance analysis
-- Transparent model interpretation
-
----
-
-## 🌐 Interactive Dashboard
-
-- Streamlit interface
-- MRI upload
-- Report upload
-- Prediction visualization
-- Explainability visualization
-
----
-
-# 🏗️ System Architecture
-
-The Cortex AI pipeline consists of four main modules.
-
-## Computer Vision Module
-
-Processes MRI scans and extracts imaging features.
-
-↓
-
-## NLP Module
-
-Processes radiology reports and generates medical text embeddings.
-
-↓
-
-## Multimodal Fusion Module
-
-Combines image and text representations for prediction.
-
-↓
-
-## Explainability & Interface Layer
-
-Displays predictions with interpretable explanations.
-
----
-
-# 🔄 High-Level Workflow
-
-```text
-MRI Images
-      │
-      ▼
-Computer Vision Module
-      │
-      ▼
-Image Features
-                    \
-                     \
-                      ► Multimodal Fusion ► Prediction ► Explainability ► Dashboard
-                     /
-                    /
-Text Reports
-      │
-      ▼
-NLP Module
-      │
-      ▼
-Text Features
+```mermaid
+flowchart LR
+    A[MRI Files] --> B[CV Preprocessing]
+    B --> C[Segmentation / Feature Extraction]
+    D[Radiology Report] --> E[NLP Preprocessing]
+    E --> F[Text Embeddings]
+    C --> G[Fusion Inference]
+    F --> G
+    H[Clinical Inputs] --> G
+    G --> I[Streamlit UI]
+    I --> J[Results / Dashboard]
 ```
 
----
-
-# 📂 Repository Structure
+## Folder Structure
 
 ```text
 CortexAI/
-│
 ├── datasets/
 │   ├── raw/
+│   │   ├── brats2020/
+│   │   └── TextBraTSData/
 │   ├── processed/
 │   ├── sample_data/
-│   └── README.md
-│
+│   └── splits/
 ├── docs/
-│
+│   ├── architecture/
+│   ├── presentation/
+│   └── proposal/
 ├── models/
-│   ├── segmentation/
+│   ├── fusion/
 │   ├── nlp/
-│   └── fusion/
-│
+│   └── segmentation/
 ├── notebooks/
-│
+│   ├── cv/
+│   ├── fusion/
+│   └── nlp/
 ├── reports/
-│
+│   ├── evaluation/
+│   ├── figures/
+│   └── results/
+├── scripts/
+│   └── verify_nlp_module.py
 ├── src/
 │   ├── cv_module/
-│   ├── nlp_module/
-│   ├── fusion_module/
 │   ├── explainability/
+│   ├── fusion_module/
+│   ├── nlp_module/
 │   ├── ui/
 │   └── utils/
-│
 ├── requirements.txt
-├── README.md
 ├── LICENSE
-└── .gitignore
+└── README.md
 ```
 
----
+### Important directories
 
-# 🧰 Technology Stack
+- datasets/: raw and processed data directories used by the CV and NLP pipelines
+- models/: trained or shipped model checkpoints and supporting artifacts
+- notebooks/: experimentation and training notebooks for CV, NLP, and fusion work
+- reports/: evaluation outputs, figures, and result artifacts
+- src/: reusable implementation modules for the project
 
-## Programming
+## Technologies Used
+
+The codebase uses the following technologies and libraries:
 
 - Python
-
----
-
-## Computer Vision
-
 - PyTorch
 - MONAI
-- OpenCV
-- NumPy
-
----
-
-## Natural Language Processing
-
-- Hugging Face Transformers
-- BioBERT
-- ClinicalBERT
-
----
-
-## Machine Learning
-
-- Scikit-learn
-- Pandas
-
----
-
-## Explainable AI
-
-- SHAP
-- Grad-CAM
-
----
-
-## User Interface
-
 - Streamlit
+- NumPy
+- Pandas
+- Scikit-learn
+- Matplotlib
+- Seaborn
+- OpenCV
+- Hugging Face Transformers
+- SHAP
 
----
+## Installation
 
-# 📊 Datasets
-
-Cortex AI uses two complementary datasets.
-
----
-
-## 🖼️ Computer Vision Dataset
-
-### BraTS2020 Training Dataset (Kaggle)
-
-Used for:
-
-- MRI preprocessing
-- Brain tumor segmentation
-- Feature extraction
-- Deep learning model training
-
-**Dataset Link**
-
-https://www.kaggle.com/datasets/awsaf49/brats20-dataset-training-validation
-https://www.kaggle.com/datasets/mariammohamed1095/workingg
-
-Expected folder:
-
-```text
-datasets/raw/brats2020/
-```
-
----
-
-## 📝 NLP Dataset
-
-### TextBraTS
-
-Used for:
-
-- Radiology report processing
-- Medical text embeddings
-- Clinical NLP
-- Multimodal alignment
-
-**Dataset Link**
-
-https://github.com/Jupitern52/TextBraTS
-
-Expected folder:
-
-```text
-datasets/raw/textbrats/
-```
-
----
-
-# ⚙️ Dataset Setup
-
-After cloning the repository:
-
-## Clone
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/nour-hossam7/CortexAI.git
 cd CortexAI
 ```
 
----
+### 2. Create and activate a virtual environment
 
-## Install Requirements
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
+On Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+### 3. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
----
+### 4. Prepare the data folders
 
-## Download Datasets
-
-Download the datasets using the links above and place them in:
-
-```text
-datasets/raw/brats2020/
-datasets/raw/textbrats/
-```
-
----
-
-## Verify Dataset Structure
-
-Run:
+The project expects locally available datasets in the raw data folders. The setup helper can create the expected directory structure:
 
 ```bash
 python -m src.utils.setup_data
 ```
 
-The script will automatically:
+### 5. Run the Streamlit app
 
-- verify dataset folders
-- create missing directories
-- validate processed folders
-- ensure project readiness
+```bash
+python -m streamlit run src/ui/app.py
+```
 
----
+## Usage
 
-# 🧪 Module Responsibilities
+The main user workflow is:
 
-## Computer Vision
+1. Open the Streamlit app.
+2. Upload MRI modality files for a case.
+3. Paste or provide a radiology report.
+4. Enter any required clinical inputs.
+5. Run inference through the existing CV, NLP, and fusion pipeline.
+6. Review the generated prediction, confidence, and case summary in the results view.
 
-- MRI preprocessing
-- Image normalization
-- Tumor segmentation
-- Feature extraction
+The UI currently expects the four MRI modalities used by the segmentation path and a report text input for the NLP feature extraction stage.
 
----
+## Configuration
 
-## NLP
+The repository uses module-level configuration files under the source tree:
 
-- Text preprocessing
-- BioBERT embeddings
-- ClinicalBERT embeddings
-- Feature extraction
+- src/cv_module/config.py for MRI preprocessing, dataset paths, and model settings
+- src/nlp_module/config.py for NLP dataset and embedding settings
+- src/fusion_module/config.py for fusion model paths and clinical settings
 
----
+No secrets or credentials are required by the current repository layout. The main runtime assumptions are local dataset availability and model checkpoints under the models directory.
 
-## Fusion
+## Models
 
-- Feature alignment
-- Image-text fusion
-- Multimodal learning
-- Prediction generation
+The repository includes or expects the following trained artifacts:
 
----
+- models/segmentation/best_model.pth: segmentation checkpoint used by the CV inference path
+- models/fusion/best_decision_model.pth: fusion decision-model checkpoint
+- models/fusion/clinical_scaler.pkl: scaler used by the fusion inference pipeline
+- models/fusion/severity_thresholds.json: threshold values used by the fusion module
 
-## Explainability
+### Model approach
 
-- Grad-CAM
-- SHAP
-- Interpretation
+- The CV component uses a MONAI-style 3D SegResNet-based workflow for image segmentation and feature extraction.
+- The NLP component uses transformer-based encoders to generate report embeddings.
+- The fusion component combines image, text, and clinical features to produce a risk-style prediction.
 
----
+### Inference workflow
 
-## UI
+- Load the segmentation model
+- Preprocess the MRI input
+- Generate a prediction mask and image features
+- Extract report embeddings
+- Run fusion inference and return a prediction with confidence values
 
-- Streamlit Dashboard
-- Prediction interface
-- Visualization
-- Integration
+## Dataset
 
----
+The project is built around two main data sources:
 
-# 👥 Team Members
+- BraTS2020-style MRI data for the CV pipeline
+- TextBraTS-style radiology report data for the NLP pipeline
 
-| Name | Role |
-|------|------|
-| Nour Hossam | NLP Developer |
-| Mariam Mohamed | Computer Vision Developer |
-| Ammar Kamal | Fusion Module Developer |
-| Ahmed Hossam | Explainable AI Developer |
-| Ibrahim Mahmoud | UI & Integration Developer |
+Expected local locations:
 
----
+- datasets/raw/brats2020/
+- datasets/raw/TextBraTSData/
 
-# 📅 Project Status
+The repository also includes processed and split directories under datasets/processed and datasets/splits for downstream training and inference work.
 
-## Current Status
+## Workflow
 
-🚧 Under Development
+The actual project workflow follows this path:
 
-### Completed
+1. Input: MRI volumes and a radiology report
+2. Preprocessing: normalize and structure the medical inputs for inference
+3. Model: run segmentation and feature extraction, then NLP embedding extraction
+4. Prediction: fuse the resulting signals into a decision output
+5. Output: present the prediction, confidence, and supporting metadata in the Streamlit UI
 
-- Repository structure ✅
-- Project architecture ✅
-- Dataset organization ✅
+## Dependencies
 
-### In Progress
+Key libraries and why they are used:
 
-- Computer Vision Module ⏳
-- NLP Module ⏳
-- Fusion Module ⏳
-- Explainable AI ⏳
-- Streamlit Dashboard ⏳
+- PyTorch and TorchVision: model training and inference
+- MONAI: 3D medical image preprocessing and segmentation workflow
+- Streamlit: interactive user interface
+- Transformers: text embedding extraction for radiology reports
+- NumPy and Pandas: numerical processing and dataset handling
+- Scikit-learn: preprocessing and model support utilities
+- Matplotlib and Seaborn: plotting and evaluation outputs
+- OpenCV: image processing support
+- SHAP: explainability-related functionality in the project
 
----
+## Performance
 
-# 🗺️ Development Roadmap
+The repository includes evaluation-related artifacts in the reports directory, but no benchmark numbers are embedded in the README. Performance and validation outputs are expected to be reviewed from the reports and notebook outputs.
 
-### Phase 1
+## Error Handling
 
-- Repository setup
-- Environment setup
-- Dataset organization
+The implementation includes basic validation and user-friendly error handling:
 
-### Phase 2
+- The UI surfaces clear messages for missing files, empty reports, and incomplete inputs
+- The NLP and inference modules raise informative exceptions when required inputs are missing or invalid
+- Dataset setup utilities report whether expected raw and processed directories are present
 
-- Computer Vision
-- NLP
+## Future Improvements
 
-### Phase 3
+Potential next steps for the project include:
 
-- Multimodal Fusion
+- Add batch processing support for multiple patients
+- Improve result export and report generation
+- Add more detailed visualizations for segmentation and explanation outputs
+- Containerize the application for easier deployment
+- Add automated tests for the UI and inference modules
 
-### Phase 4
+## Contributing
 
-- Explainable AI
+Contributions are welcome. If you would like to contribute:
 
-### Phase 5
+1. Fork the repository
+2. Create a feature branch
+3. Make focused changes
+4. Test the relevant modules or UI flow
+5. Submit a pull request with a clear summary
 
-- Dashboard
-- Evaluation
-- Final Testing
+Please keep the project structure and module boundaries intact when making changes.
 
----
+## License
 
-# 🤝 Notes for Contributors
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
-- Raw datasets are **NOT uploaded to GitHub** because they exceed GitHub's storage limits.
-- Every team member must download the datasets locally.
-- Keep the directory structure unchanged.
-- Do not rename dataset folders.
-- Store trained models inside the **models/** directory.
-- Store evaluation outputs inside **reports/**.
-- Refer to **datasets/README.md** for complete dataset setup instructions.
+## Authors
 
----
+The repository documentation references the following project contributors:
 
-# 📜 License
+- Nour Hossam
+- Mariam Mohamed
+- Ammar Kamal
+- Ahmed Hossam
+- Ibrahim Mahmoud
 
-This project is licensed under the MIT License.
+## Acknowledgments
 
----
+This project builds on established tooling and datasets used in the medical AI and NLP community, including:
 
-# 📧 Contact
+- BraTS2020-style MRI data
+- TextBraTS-style radiology report data
+- PyTorch, MONAI, Streamlit, and Hugging Face Transformers
 
-**Nour Hossam**
+## Contact
 
-GitHub:
-
-https://github.com/nour-hossam7
+Repository links and project context are maintained in the repository itself. For direct project-related questions, use the repository issue tracker or contact the listed contributors through the project space.

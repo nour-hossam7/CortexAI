@@ -16,9 +16,11 @@ from pathlib import Path
 
 import torch
 from torch.optim import AdamW
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.amp import GradScaler
 
 from monai.inferers import SlidingWindowInferer
+from monai.data import decollate_batch
 
 from .config import Config
 from .model import build_model
@@ -28,6 +30,9 @@ from .dataloader import get_train_dataloader, get_validation_dataloader
 
 __all__ = [
     "train",
+    "save_checkpoint",
+    "save_last_checkpoint",
+    "load_checkpoint",
 ]
 
 
@@ -54,15 +59,21 @@ def save_checkpoint(
     epoch: int,
     model: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
+    scheduler: torch.optim.lr_scheduler.LRScheduler,
     scaler: GradScaler,
     best_dice: float,
 ) -> None:
     """
-    Save model checkpoint to Config.CHECKPOINT_DIR.
+    Save the BEST model checkpoint to Config.CHECKPOINT_DIR / "best_model.pth".
+
+    Only called when validation Dice improves — see save_last_checkpoint()
+    below for the unconditional per-epoch save used to survive crashes
+    during a non-improving streak.
 
     Saves:
         - model state dict
         - optimizer state dict
+        - scheduler state dict
         - scaler state dict
         - epoch number
         - best validation Dice score
@@ -75,6 +86,8 @@ def save_checkpoint(
         Trained model.
     optimizer : Optimizer
         Current optimizer state.
+    scheduler : LRScheduler
+        Current CosineAnnealingLR scheduler state.
     scaler : GradScaler
         Current AMP scaler state.
     best_dice : float
@@ -90,6 +103,7 @@ def save_checkpoint(
             "epoch":           epoch,
             "model_state":     model.state_dict(),
             "optimizer_state": optimizer.state_dict(),
+            "scheduler_state": scheduler.state_dict(),
             "scaler_state":    scaler.state_dict(),
             "best_dice":       best_dice,
         },
@@ -99,45 +113,141 @@ def save_checkpoint(
     print(f"  Checkpoint saved → {checkpoint_path}")
 
 
+def save_last_checkpoint(
+    epoch: int,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    scheduler: torch.optim.lr_scheduler.LRScheduler,
+    scaler: GradScaler,
+    best_dice: float,
+) -> None:
+    """
+    Save the LATEST checkpoint to Config.CHECKPOINT_DIR / "last_model.pth",
+    unconditionally, every epoch — regardless of whether validation Dice
+    improved.
+
+    🔧 FIX: save_checkpoint() above only runs inside `if val_dice >
+    best_dice`. With patience=20, a run that crashes (Kaggle session
+    timeout, disconnect, OOM) during a non-improving streak loses up to
+    20 epochs of progress, since nothing was written to disk since the
+    last improvement. Notebook 08 avoided this by writing both
+    best_model.pth (on improvement) and last_model.pth (every epoch);
+    this restores that behavior for train.py.
+
+    To resume from the latest epoch instead of the best one, pass this
+    file's path to load_checkpoint() / load_model() explicitly.
+
+    Parameters
+    ----------
+    Same as save_checkpoint().
+    """
+
+    Config.CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+
+    checkpoint_path = Config.CHECKPOINT_DIR / "last_model.pth"
+
+    torch.save(
+        {
+            "epoch":           epoch,
+            "model_state":     model.state_dict(),
+            "optimizer_state": optimizer.state_dict(),
+            "scheduler_state": scheduler.state_dict(),
+            "scaler_state":    scaler.state_dict(),
+            "best_dice":       best_dice,
+        },
+        checkpoint_path,
+    )
+
+
 def load_checkpoint(
     model: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
+    scheduler: torch.optim.lr_scheduler.LRScheduler,
     scaler: GradScaler,
     device: torch.device,
+    checkpoint_path: Path | None = None,
 ) -> tuple[int, float]:
     """
     Load checkpoint from Config.CHECKPOINT_DIR if it exists.
+
+    Handles two checkpoint shapes, since both exist for this project:
+
+    - Full training checkpoint, saved by THIS module's save_checkpoint()
+      or save_last_checkpoint(): a dict with "model_state",
+      "optimizer_state", "scheduler_state", "scaler_state", "epoch",
+      "best_dice". Resumes training exactly where it left off —
+      optimizer momentum, LR schedule position, and AMP scaler state
+      are all restored.
+
+    - Raw state_dict, saved by the training notebooks (e.g. Notebook 08:
+      `torch.save(model.state_dict(), "best_model.pth")`). This is the
+      actual format of best_model.pth on disk today. It contains only
+      weights — no optimizer/scheduler/epoch/best_dice were ever saved
+      alongside it, so none of that can be recovered. In this case we
+      load the weights and resume from epoch 0 with a fresh optimizer
+      and scheduler, rather than raising KeyError trying to read state
+      that was never written.
 
     Parameters
     ----------
     model : nn.Module
     optimizer : Optimizer
+    scheduler : LRScheduler
     scaler : GradScaler
     device : torch.device
+    checkpoint_path : Path | None
+        Which file to resume from. Defaults to
+        Config.CHECKPOINT_DIR / "best_model.pth". Pass
+        Config.CHECKPOINT_DIR / "last_model.pth" instead to resume from
+        the most recent epoch rather than the best-Dice epoch — useful
+        after a crash mid-streak (see save_last_checkpoint()).
 
     Returns
     -------
     start_epoch : int
-        Epoch to resume from (0 if no checkpoint found).
+        Epoch to resume from (0 if no checkpoint, or if checkpoint is
+        a raw state_dict with no recorded epoch).
     best_dice : float
-        Best Dice score from previous run (0.0 if no checkpoint found).
+        Best Dice score from previous run (0.0 if no checkpoint, or if
+        checkpoint is a raw state_dict with no recorded best_dice —
+        the first validation pass of this run will set the real value).
     """
 
-    checkpoint_path = Config.CHECKPOINT_DIR / "best_model.pth"
+    if checkpoint_path is None:
+        checkpoint_path = Config.CHECKPOINT_DIR / "best_model.pth"
 
     if not checkpoint_path.exists():
         return 0, 0.0
 
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
 
-    model.load_state_dict(checkpoint["model_state"])
-    optimizer.load_state_dict(checkpoint["optimizer_state"])
-    scaler.load_state_dict(checkpoint["scaler_state"])
+    is_full_checkpoint = isinstance(checkpoint, dict) and "model_state" in checkpoint
 
-    start_epoch = checkpoint["epoch"] + 1
-    best_dice   = checkpoint["best_dice"]
+    if is_full_checkpoint:
+        model.load_state_dict(checkpoint["model_state"])
+        optimizer.load_state_dict(checkpoint["optimizer_state"])
+        scheduler.load_state_dict(checkpoint["scheduler_state"])
+        scaler.load_state_dict(checkpoint["scaler_state"])
 
-    print(f"  Resumed from epoch {checkpoint['epoch']} | Best Dice: {best_dice:.4f}")
+        start_epoch = checkpoint["epoch"] + 1
+        best_dice   = checkpoint["best_dice"]
+
+        print(f"  Resumed full checkpoint from epoch {checkpoint['epoch']} | Best Dice: {best_dice:.4f}")
+
+    else:
+        # Raw state_dict — weights only, no training state to resume.
+        model.load_state_dict(checkpoint)
+
+        start_epoch = 0
+        best_dice   = 0.0
+
+        print(
+            "  Loaded weights-only checkpoint (raw state_dict) — "
+            "no optimizer/scheduler/epoch was saved alongside it. "
+            "Starting from epoch 0 with a fresh optimizer/scheduler. "
+            "Training will still benefit from these pretrained weights; "
+            "the first validation pass will set the true best_dice."
+        )
 
     return start_epoch, best_dice
 
@@ -225,11 +335,12 @@ def validate_one_epoch(
     model:          torch.nn.Module,
     loader:         torch.utils.data.DataLoader,
     inferer:        SlidingWindowInferer,
+    loss_function:  torch.nn.Module,
     metric:         object,
     post_pred:      object,
     post_label:     object,
     device:         torch.device,
-) -> float:
+) -> tuple[float, float]:
     """
     Run one full validation epoch using sliding window inference.
 
@@ -240,25 +351,36 @@ def validate_one_epoch(
 
     This gives a more accurate evaluation than patch-based inference.
 
+    Post-processing (Activations / AsDiscrete) is applied per-sample
+    via decollate_batch, not on the raw batched tensor. MONAI's
+    Compose post-transforms expect a single (C, H, W, D) sample —
+    feeding them a batched (B, C, H, W, D) tensor directly silently
+    produces incorrect one-hot/argmax results. This matches the
+    exact pattern validated end-to-end in Notebook 08
+    (Advanced Training).
+
     Parameters
     ----------
-    model      : SegResNet in eval() mode
-    loader     : Validation DataLoader (batch_size=1, full volumes)
-    inferer    : SlidingWindowInferer
-    metric     : DiceMetric
-    post_pred  : post-processing for predictions (softmax + argmax + one-hot)
-    post_label : post-processing for labels (one-hot)
-    device     : cuda or cpu
+    model         : SegResNet in eval() mode
+    loader        : Validation DataLoader (batch_size=1, full volumes)
+    inferer       : SlidingWindowInferer
+    loss_function : DiceCELoss — used to track validation loss alongside Dice
+    metric        : DiceMetric
+    post_pred     : post-processing for predictions (softmax + argmax + one-hot)
+    post_label    : post-processing for labels (one-hot)
+    device        : cuda or cpu
 
     Returns
     -------
-    float
-        Mean Dice score across all tumor classes (NCR, Edema, ET).
-        Background is excluded (Config.INCLUDE_BACKGROUND = False).
+    tuple[float, float]
+        (mean_loss, mean_dice) over the validation set.
+        mean_dice excludes background (Config.INCLUDE_BACKGROUND = False).
     """
 
     model.eval()
     metric.reset()
+
+    running_loss = 0.0
 
     with torch.no_grad():
 
@@ -270,9 +392,12 @@ def validate_one_epoch(
             # sliding window inference over full volume
             logits = inferer(images, model)      # (1, 4, H, W, D)
 
-            # post-process
-            pred  = post_pred(logits)            # (1, 4, H, W, D) one-hot
-            label = post_label(labels)           # (1, 4, H, W, D) one-hot
+            loss = loss_function(logits, labels)
+            running_loss += loss.item()
+
+            # post-process per-sample, not on the raw batched tensor
+            pred  = [post_pred(p)  for p in decollate_batch(logits)]
+            label = [post_label(l) for l in decollate_batch(labels)]
 
             metric(y_pred=pred, y=label)
 
@@ -280,10 +405,11 @@ def validate_one_epoch(
     dice_scores = metric.aggregate()             # (num_classes,) or scalar
 
     mean_dice = dice_scores.mean().item()
+    mean_loss = running_loss / max(len(loader), 1)
 
     metric.reset()
 
-    return mean_dice
+    return mean_loss, mean_dice
 
 
 # ── Main Train Loop ───────────────────────────────────────────────────────────
@@ -294,11 +420,16 @@ def train() -> None:
 
     Steps:
         1. Set device
-        2. Build model, loss, metric, dataloaders, optimizer, inferer, scaler
+        2. Build model, loss, metric, dataloaders, optimizer, scheduler, inferer, scaler
         3. Resume from checkpoint if available
-        4. Run train + validate loop for NUM_EPOCHS
+        4. Run train + validate loop for NUM_EPOCHS, with early stopping
         5. Save best checkpoint based on validation Dice
         6. Log epoch results
+
+    Matches the training configuration validated end-to-end in
+    Notebook 08 (Advanced Training): AdamW + CosineAnnealingLR
+    (T_max=NUM_EPOCHS), early stopping with patience=20 epochs of no
+    Dice improvement.
 
     Output
     ------
@@ -306,7 +437,7 @@ def train() -> None:
         Config.CHECKPOINT_DIR / best_model.pth
 
     Console logs per epoch:
-        Epoch | Train Loss | Val Dice | (saved marker)
+        Epoch | Train Loss | Val Loss | Val Dice | LR | (saved marker)
     """
 
     # ── Setup ─────────────────────────────────────────────────────────────────
@@ -329,6 +460,11 @@ def train() -> None:
         weight_decay=Config.WEIGHT_DECAY,
     )
 
+    scheduler = CosineAnnealingLR(
+        optimizer,
+        T_max=Config.NUM_EPOCHS,
+    )
+
     scaler = GradScaler(device.type)
 
     inferer = SlidingWindowInferer(
@@ -340,8 +476,13 @@ def train() -> None:
     # ── Resume ────────────────────────────────────────────────────────────────
 
     start_epoch, best_dice = load_checkpoint(
-        model, optimizer, scaler, device
+        model, optimizer, scheduler, scaler, device
     )
+
+    # ── Early Stopping ────────────────────────────────────────────────────────
+
+    patience                   = 20
+    epochs_without_improvement = 0
 
     # ── Training Loop ─────────────────────────────────────────────────────────
 
@@ -361,15 +502,19 @@ def train() -> None:
         )
 
         # validate
-        val_dice = validate_one_epoch(
+        val_loss, val_dice = validate_one_epoch(
             model=model,
             loader=validation_loader,
             inferer=inferer,
+            loss_function=loss_function,
             metric=metric,
             post_pred=post_pred,
             post_label=post_label,
             device=device,
         )
+
+        scheduler.step()
+        current_lr = scheduler.get_last_lr()[0]
 
         # checkpoint
         saved_marker = ""
@@ -377,26 +522,49 @@ def train() -> None:
         if val_dice > best_dice:
             best_dice    = val_dice
             saved_marker = " ← saved"
+            epochs_without_improvement = 0
 
             save_checkpoint(
                 epoch=epoch,
                 model=model,
                 optimizer=optimizer,
+                scheduler=scheduler,
                 scaler=scaler,
                 best_dice=best_dice,
             )
+
+        else:
+            epochs_without_improvement += 1
+
+        # 🔧 FIX: unconditional per-epoch save, independent of best_dice
+        # improvement — see save_last_checkpoint() docstring.
+        save_last_checkpoint(
+            epoch=epoch,
+            model=model,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            scaler=scaler,
+            best_dice=best_dice,
+        )
 
         # log
         print(
             f"Epoch {epoch + 1:03d}/{Config.NUM_EPOCHS} | "
             f"Train Loss: {train_loss:.4f} | "
-            f"Val Dice:   {val_dice:.4f}"
+            f"Val Loss: {val_loss:.4f} | "
+            f"Val Dice: {val_dice:.4f} | "
+            f"LR: {current_lr:.2e}"
             f"{saved_marker}"
         )
 
+        if epochs_without_improvement >= patience:
+            print(f"\nEarly stopping triggered (no improvement for {patience} epochs).")
+            break
+
     print("-" * 65)
     print(f"Training complete. Best Val Dice: {best_dice:.4f}")
-    print(f"Checkpoint: {Config.CHECKPOINT_DIR / 'best_model.pth'}")
+    print(f"Best checkpoint: {Config.CHECKPOINT_DIR / 'best_model.pth'}")
+    print(f"Last checkpoint: {Config.CHECKPOINT_DIR / 'last_model.pth'}")
 
 
 # ── Entry Point ───────────────────────────────────────────────────────────────

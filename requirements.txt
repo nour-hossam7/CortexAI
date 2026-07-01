@@ -5,9 +5,16 @@ transformers
 numpy
 pandas
 scikit-learn
+scikit-image
 matplotlib
 seaborn
 opencv-python
 streamlit
-flask
+plotly
 shap
+reportlab
+nibabel
+SimpleITK
+scipy
+joblib
+Pillow

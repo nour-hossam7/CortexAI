@@ -1,148 +1,138 @@
-"""Configuration objects for the CortexAI NLP module.
+"""
+Project Configuration
+Brain Tumor Multimodal Analysis — NLP Module (TextBraTS)
 
-Purpose:
-    Keep model choices, preprocessing options, paths, device selection, and
-    output names configurable from one production-ready object.
+Mirrors the structure of cv_module/config.py so both modules can be
+imported side by side by the fusion module with a consistent pattern.
+
 Author:
-    Nour Hossam
-Dependencies:
-    dataclasses, pathlib, typing, torch, src.nlp_module.paths
+Nour Hossam
 """
 
-from __future__ import annotations
-
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
-
-from .paths import NLPPaths, SUPPORTED_DATASET_SUFFIXES, default_paths
-from .preprocessing import DEFAULT_MEDICAL_ABBREVIATIONS
+from typing import Tuple
 
 
-BIOBERT_MODEL_NAME = "dmis-lab/biobert-base-cased-v1.1"
-CLINICALBERT_MODEL_NAME = "emilyalsentzer/Bio_ClinicalBERT"
+@dataclass(frozen=True)
+class Config:
+    """
+    Global configuration used across the NLP module.
 
-MODEL_ALIASES = {
-    "biobert": BIOBERT_MODEL_NAME,
-    "clinicalbert": CLINICALBERT_MODEL_NAME,
-}
+    Note: this class is used purely as a namespace (Config.X), never
+    instantiated as Config(), so every field below is fully type
+    annotated to be a real dataclass field — unlike a plain class,
+    this means `python -c "from nlp_module.config import Config;
+    print(Config())"` would also work correctly if ever needed.
+    """
 
-SUPPORTED_POOLING_STRATEGIES = ("cls", "mean")
+    # ==========================================================
+    # Dataset — Raw TextBraTS reports
+    # ==========================================================
 
-
-@dataclass(frozen=True, slots=True)
-class NLPConfig:
-    """Runtime configuration for the complete NLP pipeline."""
-
-    paths: NLPPaths = field(default_factory=default_paths)
-    model_alias: str = "biobert"
-    model_name: str | None = None
-    tokenizer_name: str | None = None
-    pooling_strategy: str = "cls"
-    device: str = "auto"
-    batch_size: int = 8
-    max_length: int = 256
-    padding: bool | str = "max_length"
-    truncation: bool = True
-    random_seed: int = 42
-    lowercase: bool = False
-    normalize_abbreviations: bool = True
-    text_column: str | None = None
-    id_column: str | None = None
-    label_columns: tuple[str, ...] = ()
-    clean_text_column: str = "clean_text"
-    supported_suffixes: tuple[str, ...] = SUPPORTED_DATASET_SUFFIXES
-    local_files_only: bool = False
-    output_clean_reports_filename: str = "cleaned_reports.csv"
-    output_tokens_filename: str = "tokenized_inputs.pt"
-    output_embeddings_filename: str = "nlp_embeddings.npz"
-    output_embeddings_npy_filename: str = "embeddings.npy"
-    output_labels_filename: str = "labels.csv"
-    output_metadata_filename: str = "metadata.csv"
-    output_config_filename: str = "config.json"
-    output_manifest_filename: str = "nlp_feature_manifest.json"
-    output_eda_filename: str = "nlp_eda_summary.json"
-    abbreviation_map: dict[str, str] = field(
-        default_factory=lambda: DEFAULT_MEDICAL_ABBREVIATIONS.copy()
+    DATASET_DIR: Path = Path(
+        "datasets/raw/textbrats/TextBraTSData"
     )
 
-    def __post_init__(self) -> None:
-        """Validate immutable configuration values after initialization."""
-        if self.batch_size <= 0:
-            raise ValueError("batch_size must be greater than zero.")
-        if self.max_length <= 0:
-            raise ValueError("max_length must be greater than zero.")
-        if self.pooling_strategy not in SUPPORTED_POOLING_STRATEGIES:
-            choices = ", ".join(SUPPORTED_POOLING_STRATEGIES)
-            raise ValueError(f"pooling_strategy must be one of: {choices}")
-        if self.model_alias not in MODEL_ALIASES and self.model_name is None:
-            aliases = ", ".join(sorted(MODEL_ALIASES))
-            raise ValueError(
-                "model_alias must be one of "
-                f"{aliases}, or model_name must be provided."
-            )
-        object.__setattr__(self, "label_columns", tuple(self.label_columns))
-        object.__setattr__(
-            self,
-            "supported_suffixes",
-            tuple(suffix.lower() for suffix in self.supported_suffixes),
-        )
+    # Same dataset_split.json produced by the CV module's Notebook 03.5.
+    # The NLP split is NOT independent — it is derived from this file
+    # (Notebook 03 — apply-cv-split-to-textbrats) so that train/validation/
+    # test patient membership is identical across both modalities. This
+    # is required for the fusion module: a patient must never be "train"
+    # in one modality and "test" in the other.
+    SPLIT_FILE: Path = Path(
+        "datasets/splits/dataset_split.json"
+    )
 
-    def resolved_model_name(self) -> str:
-        """Return the Hugging Face model name selected by this config."""
-        return self.model_name or MODEL_ALIASES[self.model_alias]
+    # ==========================================================
+    # Dataset — Processed reports (.csv)
+    #
+    # Generated by Notebook 03 (split) → Notebook 04 (cleaning).
+    # Structure:
+    #   datasets/processed/nlp/
+    #       train_reports_clean.csv
+    #       validation_reports_clean.csv
+    #       test_reports_clean.csv
+    # Columns: patient_id, report, clean_report, words, characters
+    # ==========================================================
 
-    def resolved_tokenizer_name(self) -> str:
-        """Return the tokenizer name selected by this config."""
-        return self.tokenizer_name or self.resolved_model_name()
+    PROCESSED_REPORTS_DIR: Path = Path(
+        "datasets/processed/nlp"
+    )
 
-    def resolved_device(self) -> str:
-        """Resolve the configured compute device to cpu, cuda, or mps."""
-        if self.device != "auto":
-            return self.device
+    # ==========================================================
+    # Dataset — Extracted embeddings (.npy)
+    #
+    # Generated by Notebook 06a / 06b (contextual embedding extraction).
+    # Structure:
+    #   datasets/processed/nlp/<model_folder>/
+    #       train_embeddings.npy       (N_train, 768)
+    #       validation_embeddings.npy  (N_val,   768)
+    #       test_embeddings.npy        (N_test,  768)
+    #       train_metadata.csv         patient_id, in the SAME row order
+    #       validation_metadata.csv    as the corresponding .npy file
+    #       test_metadata.csv
+    #
+    # ⚠️ Row order in the .npy files matches row order in the matching
+    # metadata.csv, NOT necessarily the CV module's .pt file order.
+    # Always join on patient_id when combining with image features —
+    # never assume positional alignment across modalities.
+    # ==========================================================
 
-        try:
-            import torch
-        except ImportError:
-            return "cpu"
+    EMBEDDINGS_DIR: Path = Path(
+        "datasets/processed/nlp"
+    )
 
-        if torch.cuda.is_available():
-            return "cuda"
-        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-            return "mps"
-        return "cpu"
+    # ==========================================================
+    # Randomness
+    # ==========================================================
 
-    def with_updates(self, **updates: Any) -> "NLPConfig":
-        """Return a copy of the configuration with selected values updated."""
-        return replace(self, **updates)
+    SEED: int = 42
 
+    # ==========================================================
+    # Text Cleaning
+    # ==========================================================
 
-def build_config(
-    *,
-    project_root: Path | None = None,
-    raw_textbrats_dir: Path | None = None,
-    processed_nlp_dir: Path | None = None,
-    reports_dir: Path | None = None,
-    **updates: Any,
-) -> NLPConfig:
-    """Create an NLPConfig with optional path overrides.
+    # Whitespace/newline/tab normalization only (Notebook 04) — no
+    # lowercasing, no stopword removal, no stemming. BioBERT/ClinicalBERT
+    # tokenizers are cased and trained on raw clinical text, so aggressive
+    # cleaning would discard information the model was pretrained to use.
 
-    Args:
-        project_root: Optional repository root override.
-        raw_textbrats_dir: Optional raw TextBraTS directory override.
-        processed_nlp_dir: Optional processed NLP output directory override.
-        reports_dir: Optional reports directory override.
-        updates: Additional NLPConfig field overrides.
+    # ==========================================================
+    # Tokenization / Model
+    # ==========================================================
 
-    Returns:
-        A validated NLPConfig instance.
-    """
-    paths = default_paths(project_root=project_root)
-    if raw_textbrats_dir or processed_nlp_dir or reports_dir:
-        paths = NLPPaths(
-            project_root=paths.project_root,
-            raw_textbrats_dir=(raw_textbrats_dir or paths.raw_textbrats_dir),
-            processed_nlp_dir=(processed_nlp_dir or paths.processed_nlp_dir),
-            reports_dir=(reports_dir or paths.reports_dir),
-        )
-    return NLPConfig(paths=paths, **updates)
+    # Both candidate encoders evaluated in Notebooks 05a/05b/06a/06b/07.
+    # Embedding-statistics alone did not separate them (Notebook 07:
+    # cosine similarity ≈ 0.92 between the two) — final choice is
+    # deferred to downstream fusion performance, so both folders are
+    # kept on disk and MODEL_NAME just selects which one this module
+    # currently points to by default.
+    MODEL_NAME: str = "dmis-lab/biobert-base-cased-v1.1"
+
+    AVAILABLE_MODELS: Tuple[str, ...] = (
+        "dmis-lab/biobert-base-cased-v1.1",
+        "emilyalsentzer/Bio_ClinicalBERT",
+    )
+
+    # 99th percentile token length across train+val+test was well under
+    # this limit in both tokenizer analyses (Notebooks 05a/05b); reports
+    # longer than this are truncated. See Notebook 05a §7 for the full
+    # truncation-vs-length tradeoff table.
+    MAX_LENGTH: int = 256
+
+    # ==========================================================
+    # Embedding Output
+    # ==========================================================
+
+    EMBEDDING_DIM: int = 768
+
+    # ==========================================================
+    # Saving
+    # ==========================================================
+
+    LOG_DIR: Path = Path("logs")
+
+    RESULT_DIR: Path = Path("reports/nlp/results")
+
+    FIGURE_DIR: Path = Path("reports/nlp/figures")

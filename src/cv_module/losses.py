@@ -7,8 +7,6 @@ Mariam Mohamed
 
 import torch.nn as nn
 
-from .config import Config
-
 from monai.losses import DiceCELoss
 
 __all__ = [
@@ -30,6 +28,15 @@ def build_loss() -> nn.Module:
 
     Recommended by MONAI for multi-class
     brain tumor segmentation.
+
+    Deliberately matches DiceCELoss(to_onehot_y=True, softmax=True)
+    exactly as used in Notebook 08 (Advanced Training) — the run that
+    actually produced the current best_model.pth. squared_pred,
+    smooth_nr, and smooth_dr are left at MONAI's defaults rather than
+    Config.SQUARED_PRED / Config.SMOOTH_NR / Config.SMOOTH_DR, since
+    Notebook 08 never set those and resuming training with a different
+    loss shape than the one the checkpoint was trained under would
+    silently change the optimization target.
     """
 
     loss = DiceCELoss(
@@ -37,12 +44,6 @@ def build_loss() -> nn.Module:
         to_onehot_y=True,
 
         softmax=True,
-
-        squared_pred=Config.SQUARED_PRED,
-
-        smooth_nr=Config.SMOOTH_NR,
-
-        smooth_dr=Config.SMOOTH_DR,
 
     )
 

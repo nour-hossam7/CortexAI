@@ -19,6 +19,12 @@ __pycache__/
 # (confirmed under GitHub's 100MB limit; the .pt preprocessed
 # volumes themselves stay ignored and are shared via Kaggle)
 !models/segmentation/best_model.pth
+!models/fusion/best_decision_model.pth
+
+# Keep the shipped NLP embeddings and metadata so the Fusion and
+# similar-patient features work on a fresh clone without missing files.
+!datasets/processed/nlp/
+!datasets/processed/nlp/**
 
 # =========================
 # Medical imaging files

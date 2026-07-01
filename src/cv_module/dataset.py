@@ -29,6 +29,8 @@ import json
 from pathlib import Path
 from typing import Dict, List
 
+import numpy as np
+import pandas as pd
 import torch
 from torch.utils.data import Dataset
 
@@ -52,6 +54,8 @@ __all__ = [
     "get_train_dataset",
     "get_validation_dataset",
     "get_test_dataset",
+    "load_image_features",
+    "build_image_feature_lookup",
 ]
 
 
@@ -117,8 +121,7 @@ def build_patient_dict(patient_id: str) -> Dict[str, object]:
     ------
     FileNotFoundError
         If any modality file or the segmentation file is not found in
-        the patient directory. Raised internally by next() when glob()
-        returns no results.
+        the patient directory.
     """
 
     patient_dir = Config.DATASET_PATH / patient_id
@@ -163,8 +166,7 @@ class PreprocessedDataset(Dataset):
     top of the already-preprocessed tensors. Because
     RandCropByPosNegLabeld always returns a *list* of NUM_SAMPLES patch
     dicts (not a single dict), __getitem__ returns that list as-is when
-    a transform is given — it does NOT try to re-wrap it into a single
-    {"image": ..., "label": ...} dict. The DataLoader must be built with
+    a transform is given. The DataLoader must be built with
     `collate_fn=list_data_collate` (see dataloader.py) to correctly
     batch these lists, exactly as validated in Notebook 08.
 
@@ -174,10 +176,6 @@ class PreprocessedDataset(Dataset):
         One of "train", "validation", "test".
     transform : Compose | None
         Optional transform applied to each loaded sample.
-        For training: pass get_patch_transforms() — returns a list of
-        patch dicts; __getitem__ passes that list through unchanged.
-        For validation / test: pass None — returns a single dict with
-        the four keys below.
     """
 
     def __init__(
@@ -202,10 +200,6 @@ class PreprocessedDataset(Dataset):
         sample = torch.load(path, weights_only=False)
 
         if self.transform is None:
-            # Validation / test: no transform, return the single sample
-            # dict with all four keys explicitly, so Notebooks 09–11
-            # (Inference, Feature Extraction, Evaluation) can access
-            # patient_id and metadata without reloading the .pt file.
             return {
                 "image":      sample["image"],
                 "label":      sample["label"],
@@ -213,11 +207,6 @@ class PreprocessedDataset(Dataset):
                 "patient_id": sample["patient_id"],
             }
 
-        # Training: get_patch_transforms() (RandCropByPosNegLabeld)
-        # always returns a list of NUM_SAMPLES patch dicts — pass it
-        # through unchanged. Do NOT index into it with ["image"] here;
-        # that only works for a single dict, not a list of dicts.
-        # collate_fn=list_data_collate (dataloader.py) handles batching.
         return self.transform(sample)
 
 
@@ -229,9 +218,7 @@ def _build_cache_dataset(
 ) -> CacheDataset:
     """
     Internal helper — build a CacheDataset from raw NIfTI files.
-
     Used only when preprocessed .pt files are not available.
-    cache_rate is controlled via Config.CACHE_RATE.
     """
 
     return CacheDataset(
@@ -247,23 +234,7 @@ def _build_cache_dataset(
 def get_train_dataset() -> PreprocessedDataset:
     """
     Return the training dataset backed by preprocessed .pt files.
-
-    Applies get_patch_transforms on top of the loaded tensors:
-        SpatialPadd → RandCropByPosNegLabeld → augmentation
-
-    Note: this uses get_patch_transforms(), NOT get_training_transforms().
-    get_training_transforms() starts with LoadImaged, which expects file
-    paths — it is meant for the raw-NIfTI fallback path
-    (_build_cache_dataset), not for samples already loaded from .pt files.
-    Passing get_training_transforms() here would crash on the first
-    transform, since sample["image"] is already a tensor.
-
-    Each item returned is a list of NUM_SAMPLES patch dicts:
-        image : (4, 128, 128, 128)
-        label : (1, 128, 128, 128)
-
-    The DataLoader collates these into batches automatically.
-    See dataloader.py for the exact DataLoader configuration.
+    Applies get_patch_transforms on top of the loaded tensors.
     """
 
     return PreprocessedDataset(
@@ -275,14 +246,8 @@ def get_train_dataset() -> PreprocessedDataset:
 def get_validation_dataset() -> PreprocessedDataset:
     """
     Return the validation dataset backed by preprocessed .pt files.
-
     No augmentation, no patch sampling. Full preprocessed volumes
-    (variable size per patient) are passed to SlidingWindowInferer
-    during validation.
-
-    Each item:
-        image : (4, D, H, W)   — variable spatial dims
-        label : (1, D, H, W)
+    passed to SlidingWindowInferer during validation.
     """
 
     return PreprocessedDataset(
@@ -295,14 +260,102 @@ def get_test_dataset() -> PreprocessedDataset:
     """
     Return the test dataset backed by preprocessed .pt files.
 
-    No label key in the .pt files (excluded at serialization time in
-    Notebook 06.5 for test patients, or ignored here if present).
-
-    Each item:
-        image : (4, D, H, W)
+    Note: label is physically present in the test .pt files (BraTS2020
+    "test" here is a held-out slice of labeled training data), but
+    downstream consumers deliberately ignore it to mirror real inference
+    conditions where no ground-truth mask is available.
     """
 
     return PreprocessedDataset(
         subset="test",
         transform=None,
     )
+
+
+# ── Precomputed Bottleneck Feature Lookup (Notebook 10 outputs) ───────────────
+
+def load_image_features(
+    subset: str,
+) -> Dict[str, np.ndarray]:
+    """
+    Load precomputed bottleneck features for one split, indexed by patient_id.
+
+    Reads the .npy feature matrix and the matching metadata .csv saved by
+    Notebook 10 (Deep Feature Extraction & Embedding Analysis) and zips
+    them into a {patient_id: feature_vector} dict, so callers never have
+    to reason about row order themselves.
+
+    Mirrors nlp_module.dataset.load_text_embeddings() in structure and
+    return type so the fusion module (Ammar) can load both modalities
+    with an identical pattern:
+
+        image_feats = cv_module.dataset.load_image_features("train")
+        text_feats  = nlp_module.dataset.load_text_embeddings("train")
+        # both are {patient_id: np.ndarray}
+
+    ⚠️  Row order in the .npy files matches the metadata .csv within
+    the same call, but is NOT guaranteed to match any other ordering
+    (NLP embedding files, PreprocessedDataset.__getitem__ order, etc.).
+    Always join on patient_id — never assume positional alignment.
+
+    Parameters
+    ----------
+    subset : str
+        One of "train", "validation", "test".
+
+    Returns
+    -------
+    dict
+        {patient_id: np.ndarray shape (C,)} where C is the bottleneck
+        feature dimension (256 for SegResNet with init_filters=32).
+
+    Raises
+    ------
+    AssertionError
+        If the .npy row count does not match the metadata row count —
+        indicates the two files are out of sync and Notebook 10 must
+        be re-run to regenerate them together.
+    """
+
+    if subset not in ("train", "validation", "test"):
+        raise ValueError(f"Unknown subset '{subset}'.")
+
+    result_dir = Config.RESULT_DIR
+
+    features = np.load(result_dir / f"bottleneck_features_{subset}.npy")
+    metadata = pd.read_csv(result_dir / f"{subset}_metadata.csv")
+
+    assert len(features) == len(metadata), (
+        f"Mismatch in '{subset}' image features: "
+        f"{len(features)} feature rows vs {len(metadata)} metadata rows. "
+        f"Re-run Notebook 10 to regenerate both files together."
+    )
+
+    patient_ids = metadata["patient_id"].tolist()
+
+    return dict(zip(patient_ids, features))
+
+
+def build_image_feature_lookup() -> Dict[str, np.ndarray]:
+    """
+    Load and merge precomputed bottleneck features for ALL three splits
+    into a single {patient_id: feature_vector} dict.
+
+    Convenience for the fusion module — most fusion code just needs
+    "give me this patient's image feature vector" without caring which
+    split it came from. Mirrors nlp_module.dataset.build_embedding_lookup().
+
+    Returns
+    -------
+    dict
+        {patient_id: np.ndarray shape (C,)} for every patient across
+        train, validation, and test combined. Keys are guaranteed unique
+        because the three splits are disjoint by construction.
+    """
+
+    lookup: Dict[str, np.ndarray] = {}
+
+    for subset in ("train", "validation", "test"):
+        lookup.update(load_image_features(subset))
+
+    return lookup
