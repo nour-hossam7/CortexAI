@@ -1,30 +1,46 @@
 # CortexAI
 
-CortexAI is a multimodal brain-tumor clinical decision support system implemented in Python. The project combines MRI-based segmentation, radiology-report NLP, multimodal fusion, and an interactive Streamlit UI to provide a research-oriented workflow for brain-tumor analysis and decision support.
+<h1 align="center">CortexAI</h1>
+<p align="center">
+    Multimodal brain tumor clinical decision support system for MRI segmentation, radiology-report NLP, fusion risk prediction, and interactive analysis.
+</p>
 
-![Project banner placeholder](https://via.placeholder.com/1200x320?text=CortexAI)
+<p align="center">
+    <a href="https://cortexai.streamlit.app/">
+        <img src="https://img.shields.io/badge/Live_Demo-Open_Streamlit_App-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white" alt="Live Demo" />
+    </a>
+    <a href="https://github.com/nour-hossam7/CortexAI">
+        <img src="https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github" alt="GitHub Repository" />
+    </a>
+    <a href="#architecture">
+        <img src="https://img.shields.io/badge/Documentation-Read_the_README-2D6CDF?style=for-the-badge" alt="Documentation" />
+    </a>
+</p>
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-Enabled-EE4C2C)](https://pytorch.org/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-UI-FF4B4B)](https://streamlit.io/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+<p align="center">
+    <img src="https://img.shields.io/badge/Python-Streamlit%20App-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python" />
+    <img src="https://img.shields.io/badge/PyTorch-Deep%20Learning-EE4C2C?style=flat-square&logo=pytorch&logoColor=white" alt="PyTorch" />
+    <img src="https://img.shields.io/badge/MONAI-Medical%20Imaging-00A3A3?style=flat-square" alt="MONAI" />
+    <img src="https://img.shields.io/badge/Streamlit-Interactive%20UI-FF4B4B?style=flat-square&logo=streamlit&logoColor=white" alt="Streamlit" />
+    <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT License" />
+</p>
 
 ## Table of Contents
 
-- [Project Overview](#project-overview)
+- [Overview](#overview)
 - [Features](#features)
 - [Screenshots](#screenshots)
 - [Architecture](#architecture)
 - [Folder Structure](#folder-structure)
-- [Technologies Used](#technologies-used)
+- [Technologies](#technologies)
 - [Installation](#installation)
+- [Live Demo](#live-demo)
 - [Usage](#usage)
-- [Configuration](#configuration)
 - [Models](#models)
 - [Dataset](#dataset)
 - [Workflow](#workflow)
-- [Dependencies](#dependencies)
-- [Error Handling](#error-handling)
+- [Performance](#performance)
+- [Project Highlights](#project-highlights)
 - [Future Improvements](#future-improvements)
 - [Contributing](#contributing)
 - [License](#license)
@@ -32,111 +48,135 @@ CortexAI is a multimodal brain-tumor clinical decision support system implemente
 - [Acknowledgments](#acknowledgments)
 - [Contact](#contact)
 
-## Project Overview
+## Overview
 
-CortexAI was designed to support brain-tumor analysis by combining complementary information from:
+CortexAI is a Streamlit-based multimodal decision support application for brain tumor analysis. It combines 3D MRI segmentation, radiology-report NLP, clinical feature engineering, fusion-based risk prediction, and explainability tools in a single workflow.
 
-- MRI volumes for segmentation and feature extraction
-- Radiology report text for clinical-language embedding extraction
-- Clinical-style feature inputs for multimodal fusion prediction
+The project exists to show how imaging, text, and structured clinical signals can be combined into one operational pipeline. It is useful for researchers, students, developers, and reviewers who want a reproducible brain tumor AI demo rather than a notebook-only prototype.
 
-The repository contains both research-oriented notebooks and reusable Python modules for preprocessing, training, inference, evaluation, and a Streamlit-based interface.
+The implementation is organized around three real inference paths:
 
-### Main objectives
-
-- Perform MRI-based segmentation using a 3D segmentation model
-- Extract image features for downstream fusion
-- Process radiology reports using transformer-based NLP components
-- Fuse image, text, and clinical signals into a risk-style prediction workflow
-- Expose the workflow through a polished Streamlit UI
-
-### Intended users
-
-- Researchers working on multimodal medical AI
-- Students and teams presenting a graduation or academic project
-- Developers interested in reusing the pipeline for inference and experimentation
+- MRI analysis for segmentation, tumor statistics, and Grad-CAM
+- Clinical report analysis for entity highlighting and NLP-derived features
+- Fusion AI for low / medium / high risk prediction
 
 ## Features
 
-- MRI preprocessing and inference support for 3D medical volumes
-- Segmentation inference using a MONAI-based SegResNet checkpoint
-- Image feature extraction for multimodal fusion
-- Radiology report cleaning and embedding extraction with Hugging Face transformers
-- Fusion-model inference combining image, text, and clinical inputs
-- Streamlit-based home, prediction, results, and dashboard interface
-- Dataset verification and setup utilities
-- Evaluation and reporting assets under the reports directory
+### MRI and segmentation
+
+- Upload a preprocessed `.pt` volume or four raw MRI modalities (`FLAIR`, `T1`, `T1ce`, `T2`)
+- Run 3D SegResNet inference on BraTS2020-style MRI volumes
+- Generate segmentation masks for the four class labels used in the project
+- Compute tumor statistics, bounding boxes, and volume summaries
+- Visualize MRI slices, 3D tumor views, and Grad-CAM overlays
+
+### Clinical text analysis
+
+- Paste a report or upload a `.txt` clinical note
+- Clean radiology text with lightweight whitespace normalization
+- Extract anatomical, laterality, and pathology features from report text
+- Highlight detected entities directly in the UI
+- Surface an AI-generated medical summary when available in session state
+
+### Fusion and decision support
+
+- Combine image features, text embeddings, and clinical features
+- Produce a three-class risk prediction: Low, Medium, or High
+- Show per-class probabilities and a confidence dashboard
+- Display clinical recommendations derived from the predicted label
+- Reuse the same fusion checkpoint for batch and single-case inference
+
+### Explainability and reporting
+
+- View Grad-CAM explanations for segmentation targets
+- Inspect SHAP-based clinical feature importance when saved outputs exist
+- Review similar-patient retrieval tables when cohort representations are available
+- Browse saved evaluation figures from the CV and fusion pipelines
+- Export PDF, PNG, CSV, JSON, and NIfTI artifacts from the UI
 
 ## Screenshots
 
-The repository does not currently include saved screenshots, so the following placeholders mark the expected UI areas:
+No screenshots are checked into the repository, so the section below is a placeholder layout for the current UI surface.
 
-- Home page: placeholder for the landing experience
-- Dashboard: placeholder for the project-status overview
-- Prediction page: placeholder for MRI/report intake and inference controls
-- Results page: placeholder for prediction summary and confidence views
-- Analytics: placeholder for evaluation and reporting outputs
-- Reports: placeholder for generated summaries and charts
+| Home | Dashboard | Prediction |
+| --- | --- | --- |
+| Screenshot placeholder | Screenshot placeholder | Screenshot placeholder |
+| Results | Analytics | Reports |
+| Screenshot placeholder | Screenshot placeholder | Screenshot placeholder |
 
 ## Architecture
 
-The repository follows a modular pipeline:
-
-1. MRI inputs are preprocessed and passed through the CV segmentation model.
-2. Image features are extracted from the segmentation backbone.
-3. Radiology text is cleaned and transformed into embeddings through the NLP module.
-4. Image features, text features, and clinical inputs are combined by the fusion module.
-5. The UI exposes the workflow for prediction and result presentation.
+CortexAI follows a three-branch input pipeline that converges in a multimodal fusion model.
 
 ```mermaid
-flowchart LR
-    A[MRI Files] --> B[CV Preprocessing]
-    B --> C[Segmentation / Feature Extraction]
-    D[Radiology Report] --> E[NLP Preprocessing]
-    E --> F[Text Embeddings]
-    C --> G[Fusion Inference]
-    F --> G
-    H[Clinical Inputs] --> G
-    G --> I[Streamlit UI]
-    I --> J[Results / Dashboard]
+flowchart TD
+        A[MRI input<br/>.pt or 4 NIfTI modalities] --> B[CV preprocessing<br/>load, crop, scale, normalize]
+        B --> C[SegResNet segmentation]
+        C --> D[Segmentation mask + tumor stats]
+        C --> E[256-d image features]
+
+        F[Radiology report<br/>paste or .txt upload] --> G[NLP cleaning]
+        G --> H[BioBERT / ClinicalBERT encoder]
+        H --> I[768-d text embedding]
+
+        D --> J[Clinical feature engineering]
+        F --> J
+        J --> K[13-feature clinical vector]
+
+        E --> L[Fusion encoder]
+        I --> L
+        K --> M[Decision head]
+        L --> M
+        M --> N[Low / Medium / High risk]
+
+        N --> O[Streamlit dashboard]
+        N --> P[Explainability]
+        N --> Q[Exported reports]
 ```
+
+The key implementation details are:
+
+- Segmentation uses a 3D MONAI SegResNet checkpoint on four MRI modalities.
+- Image features come from the SegResNet bottleneck and are global-average-pooled to 256 dimensions.
+- Report embeddings come from a frozen BERT-family encoder with attention-mask-aware mean pooling.
+- Fusion projects image and text into a shared 256-d representation, then concatenates clinical features before classification.
 
 ## Folder Structure
 
 ```text
 CortexAI/
+├── app.py
 ├── datasets/
 │   ├── raw/
 │   │   ├── brats2020/
-│   │   └── TextBraTSData/
+│   │   └── textbrats/TextBraTSData/
 │   ├── processed/
-│   ├── sample_data/
+│   │   ├── cv/
+│   │   ├── nlp/
+│   │   └── fusion/
 │   └── splits/
 ├── docs/
 │   ├── architecture/
 │   ├── presentation/
 │   └── proposal/
 ├── models/
-│   ├── fusion/
-│   ├── nlp/
-│   └── segmentation/
+│   ├── segmentation/
+│   └── fusion/
 ├── notebooks/
 │   ├── cv/
 │   ├── fusion/
 │   └── nlp/
+├── pages/
 ├── reports/
-│   ├── evaluation/
 │   ├── figures/
+│   │   └── fusion/
 │   └── results/
-├── scripts/
-│   └── verify_nlp_module.py
 ├── src/
 │   ├── cv_module/
 │   ├── explainability/
 │   ├── fusion_module/
 │   ├── nlp_module/
-│   ├── ui/
-│   └── utils/
+│   └── ui/
 ├── requirements.txt
 ├── LICENSE
 └── README.md
@@ -144,28 +184,49 @@ CortexAI/
 
 ### Important directories
 
-- datasets/: raw and processed data directories used by the CV and NLP pipelines
-- models/: trained or shipped model checkpoints and supporting artifacts
-- notebooks/: experimentation and training notebooks for CV, NLP, and fusion work
-- reports/: evaluation outputs, figures, and result artifacts
-- src/: reusable implementation modules for the project
+- `app.py`: root Streamlit launcher used to start the app.
+- `pages/`: multipage Streamlit interface for MRI, clinical reports, fusion, explainability, analytics, reports, settings, and about.
+- `src/cv_module/`: BraTS2020 segmentation model, preprocessing, dataloading, prediction, training, and metrics.
+- `src/nlp_module/`: report preprocessing, tokenization, and frozen BERT encoder utilities.
+- `src/fusion_module/`: clinical feature engineering, fusion model, training, inference, and evaluation.
+- `src/ui/`: Streamlit bootstrap code, shared components, session state, and export utilities.
+- `datasets/`: raw dataset roots, processed artifacts, and split metadata.
+- `models/`: shipped checkpoints and inference artifacts.
+- `reports/`: evaluation CSVs and generated figures used by the analytics and explainability pages.
+- `notebooks/`: the research notebooks that mirror the implemented pipelines.
 
-## Technologies Used
+## Technologies
 
-The codebase uses the following technologies and libraries:
+### Core AI stack
 
-- Python
-- PyTorch
-- MONAI
-- Streamlit
+- 🧠 PyTorch
+- 🩻 MONAI
+- 🤗 Hugging Face Transformers
+
+### Application and visualization
+
+- 🚀 Streamlit
+- 📈 Plotly
+- 🧾 ReportLab
+
+### Data and analysis
+
 - NumPy
 - Pandas
-- Scikit-learn
+- scikit-learn
+- SHAP
+- SciPy
+- joblib
+
+### Imaging and utility libraries
+
+- OpenCV
+- scikit-image
+- NiBabel
+- SimpleITK
 - Matplotlib
 - Seaborn
-- OpenCV
-- Hugging Face Transformers
-- SHAP
+- Pillow
 
 ## Installation
 
@@ -176,14 +237,7 @@ git clone https://github.com/nour-hossam7/CortexAI.git
 cd CortexAI
 ```
 
-### 2. Create and activate a virtual environment
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-```
-
-On Windows PowerShell:
+### 2. Create a virtual environment
 
 ```powershell
 python -m venv .venv
@@ -196,137 +250,120 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-### 4. Prepare the data folders
-
-The project expects locally available datasets in the raw data folders. The setup helper can create the expected directory structure:
+### 4. Prepare the expected dataset folders
 
 ```bash
 python -m src.utils.setup_data
 ```
 
-### 5. Run the Streamlit app
+This creates the required directory structure and checks for the expected BraTS2020 and TextBraTS locations.
+
+### 5. Start the Streamlit app
 
 ```bash
-python -m streamlit run src/ui/app.py
+streamlit run app.py
 ```
+
+<a id="live-demo"></a>
+
+## 🚀 Live Demo
+
+Try the deployed application first:
+
+**https://cortexai.streamlit.app/**
+
+The live app mirrors the main repository workflow and is the fastest way to review the UI.
 
 ## Usage
 
-The main user workflow is:
+The implemented user flow is:
 
-1. Open the Streamlit app.
-2. Upload MRI modality files for a case.
-3. Paste or provide a radiology report.
-4. Enter any required clinical inputs.
-5. Run inference through the existing CV, NLP, and fusion pipeline.
-6. Review the generated prediction, confidence, and case summary in the results view.
-
-The UI currently expects the four MRI modalities used by the segmentation path and a report text input for the NLP feature extraction stage.
-
-## Configuration
-
-The repository uses module-level configuration files under the source tree:
-
-- src/cv_module/config.py for MRI preprocessing, dataset paths, and model settings
-- src/nlp_module/config.py for NLP dataset and embedding settings
-- src/fusion_module/config.py for fusion model paths and clinical settings
-
-No secrets or credentials are required by the current repository layout. The main runtime assumptions are local dataset availability and model checkpoints under the models directory.
+1. Open the Home dashboard and review the summary cards.
+2. Go to MRI Analysis and upload either a serialized `.pt` study or the four NIfTI modalities.
+3. Add the clinical report text required by the fusion pipeline.
+4. Run full multimodal analysis to generate segmentation, tumor statistics, Grad-CAM, and fusion outputs.
+5. Open Clinical Report to inspect extracted report entities and highlighted text.
+6. Open Fusion AI to review the predicted risk class and class probabilities.
+7. Open Explainability for Grad-CAM, SHAP, and similar-patient views.
+8. Open Analytics and Generated Reports to review metrics, figures, and export artifacts.
 
 ## Models
 
-The repository includes or expects the following trained artifacts:
+| Model | Purpose | Input | Output | Notes |
+| --- | --- | --- | --- | --- |
+| SegResNet | 3D MRI segmentation | `(B, 4, 128, 128, 128)` MRI volume | `(B, 4, D, H, W)` class logits and a 256-d bottleneck feature | Uses the four project modalities: FLAIR, T1, T1ce, T2 |
+| BioBERT / ClinicalBERT encoder | Clinical report embedding | Tokenized report text | `768-d` embedding | Frozen encoder with attention-mask-aware mean pooling |
+| ClinicalDecisionModel | Multimodal risk prediction | `256-d` image feature, `768-d` text feature, clinical vector | `3` risk logits and softmax probabilities | Produces Low / Medium / High risk predictions |
 
-- models/segmentation/best_model.pth: segmentation checkpoint used by the CV inference path
-- models/fusion/best_decision_model.pth: fusion decision-model checkpoint
-- models/fusion/clinical_scaler.pkl: scaler used by the fusion inference pipeline
-- models/fusion/severity_thresholds.json: threshold values used by the fusion module
+### Inference pipeline
 
-### Model approach
-
-- The CV component uses a MONAI-style 3D SegResNet-based workflow for image segmentation and feature extraction.
-- The NLP component uses transformer-based encoders to generate report embeddings.
-- The fusion component combines image, text, and clinical features to produce a risk-style prediction.
-
-### Inference workflow
-
-- Load the segmentation model
-- Preprocess the MRI input
-- Generate a prediction mask and image features
-- Extract report embeddings
-- Run fusion inference and return a prediction with confidence values
+- Load the SegResNet checkpoint from `models/segmentation/best_model.pth`.
+- Preprocess MRI data with cropping, intensity scaling, and normalization.
+- Extract a 256-dimensional image feature vector from the encoder bottleneck.
+- Encode the report with BioBERT or ClinicalBERT into a 768-dimensional embedding.
+- Build the clinical feature vector from tumor statistics and report-derived features.
+- Run the fusion checkpoint in `models/fusion/best_decision_model.pth`.
+- Apply softmax to get the predicted class and confidence.
 
 ## Dataset
 
-The project is built around two main data sources:
+CortexAI is built around two real datasets:
 
-- BraTS2020-style MRI data for the CV pipeline
-- TextBraTS-style radiology report data for the NLP pipeline
+| Dataset | Role in the project | Verified details |
+| --- | --- | --- |
+| BraTS2020 | MRI segmentation and image feature extraction | 369 patients total, split into 257 train / 56 validation / 56 test; modalities are FLAIR, T1, T1ce, and T2; labels are Background, NCR/NET, Edema, and Enhancing Tumor |
+| TextBraTS | Radiology report NLP and clinical feature extraction | Used for report cleaning, report embeddings, and multimodal fusion; the raw data is expected locally and is not committed in this repository |
 
-Expected local locations:
-
-- datasets/raw/brats2020/
-- datasets/raw/TextBraTSData/
-
-The repository also includes processed and split directories under datasets/processed and datasets/splits for downstream training and inference work.
+The repository tracks split metadata in `datasets/splits/dataset_info.json` and `datasets/splits/dataset_split.json`, along with processed folder placeholders and generated artifacts.
 
 ## Workflow
 
-The actual project workflow follows this path:
-
-1. Input: MRI volumes and a radiology report
-2. Preprocessing: normalize and structure the medical inputs for inference
-3. Model: run segmentation and feature extraction, then NLP embedding extraction
-4. Prediction: fuse the resulting signals into a decision output
-5. Output: present the prediction, confidence, and supporting metadata in the Streamlit UI
-
-## Dependencies
-
-Key libraries and why they are used:
-
-- PyTorch and TorchVision: model training and inference
-- MONAI: 3D medical image preprocessing and segmentation workflow
-- Streamlit: interactive user interface
-- Transformers: text embedding extraction for radiology reports
-- NumPy and Pandas: numerical processing and dataset handling
-- Scikit-learn: preprocessing and model support utilities
-- Matplotlib and Seaborn: plotting and evaluation outputs
-- OpenCV: image processing support
-- SHAP: explainability-related functionality in the project
+1. Input arrives as MRI files and report text.
+2. MRI preprocessing loads the volume, ensures channel order, crops foreground, scales intensity, and normalizes.
+3. SegResNet produces tumor segmentation and bottleneck features.
+4. Report preprocessing normalizes whitespace and extracts clinical entities and keyword-based features.
+5. Clinical features are combined with the MRI-derived statistics.
+6. The fusion model combines image, text, and clinical vectors into a risk prediction.
+7. The UI renders the prediction, confidence, explainability outputs, analytics, and export options.
 
 ## Performance
 
-The repository includes evaluation-related artifacts in the reports directory, but no benchmark numbers are embedded in the README. Performance and validation outputs are expected to be reviewed from the reports and notebook outputs.
+The repository ships evaluation artifacts rather than a fabricated benchmark table.
 
-## Error Handling
+| Area | Shipped artifacts |
+| --- | --- |
+| CV segmentation | `reports/results/training_history.csv`, `reports/results/evaluation_results.csv`, `reports/figures/loss_curve.png`, `reports/figures/dice_curve.png`, `reports/figures/subregion_dice.png` |
+| Fusion model | `models/fusion/training_history.csv`, `reports/figures/fusion/confusion_matrices.png`, `reports/figures/fusion/calibration.png`, `reports/figures/fusion/confidence_distribution.png`, `reports/figures/fusion/repr_pca_tsne_risk.png`, `reports/figures/fusion/repr_pca_splits.png` |
+| Explainability | `reports/figures/fusion/shap_clinical_importance.png`, `reports/figures/fusion/shap_beeswarm.png`, `reports/figures/fusion/shap_waterfall_examples.png`, similar-patient retrieval outputs |
 
-The implementation includes basic validation and user-friendly error handling:
+The README does not invent headline numbers. Inspect the CSV and figure assets for the actual measured results.
 
-- The UI surfaces clear messages for missing files, empty reports, and incomplete inputs
-- The NLP and inference modules raise informative exceptions when required inputs are missing or invalid
-- Dataset setup utilities report whether expected raw and processed directories are present
+## Project Highlights
+
+- Multimodal medical AI pipeline for brain tumor analysis
+- 3D MRI segmentation with SegResNet
+- Clinical report NLP with BioBERT / ClinicalBERT embeddings
+- Fusion-based Low / Medium / High risk stratification
+- Interactive Streamlit dashboard with multipage navigation
+- Explainability with Grad-CAM, SHAP, and similar-patient retrieval
+- Exportable analysis artifacts for reports and review
 
 ## Future Improvements
 
-Potential next steps for the project include:
-
-- Add batch processing support for multiple patients
-- Improve result export and report generation
-- Add more detailed visualizations for segmentation and explanation outputs
-- Containerize the application for easier deployment
-- Add automated tests for the UI and inference modules
+- Add committed screenshots from the live app.
+- Publish a dedicated documentation site or pages under `docs/`.
+- Add automated tests for the UI helpers and inference wrappers.
+- Add a small sample dataset package for faster local smoke testing.
 
 ## Contributing
 
-Contributions are welcome. If you would like to contribute:
+Contributions are welcome. If you plan to change the pipeline, please keep the implementation aligned with the existing dataset split, model checkpoints, and UI workflow.
 
-1. Fork the repository
-2. Create a feature branch
-3. Make focused changes
-4. Test the relevant modules or UI flow
-5. Submit a pull request with a clear summary
-
-Please keep the project structure and module boundaries intact when making changes.
+1. Fork the repository.
+2. Create a feature branch.
+3. Make focused changes with verified behavior.
+4. Run the relevant app or module checks before opening a pull request.
+5. Keep README and code updates in sync when behavior changes.
 
 ## License
 
@@ -334,22 +371,25 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 
 ## Authors
 
-The repository documentation references the following project contributors:
+The repository history currently shows these contributors:
 
 - Nour Hossam
 - Mariam Mohamed
-- Ammar Kamal
-- Ahmed Hossam
-- Ibrahim Mahmoud
 
 ## Acknowledgments
 
-This project builds on established tooling and datasets used in the medical AI and NLP community, including:
-
-- BraTS2020-style MRI data
-- TextBraTS-style radiology report data
-- PyTorch, MONAI, Streamlit, and Hugging Face Transformers
+- BraTS2020 for the MRI segmentation dataset.
+- TextBraTS for the radiology-report NLP dataset.
+- MONAI for medical imaging utilities and the SegResNet backbone.
+- PyTorch for model training and inference.
+- Streamlit for the interactive application layer.
+- Hugging Face Transformers for the BERT-family encoders.
+- SHAP, Plotly, Matplotlib, and Seaborn for explainability and analytics.
+- ReportLab for PDF report generation.
 
 ## Contact
 
-Repository links and project context are maintained in the repository itself. For direct project-related questions, use the repository issue tracker or contact the listed contributors through the project space.
+- GitHub Repository: https://github.com/nour-hossam7/CortexAI
+- Live Demo: https://cortexai.streamlit.app/
+
+If you are reviewing the project, start with the live demo above and then return here for the implementation details.
