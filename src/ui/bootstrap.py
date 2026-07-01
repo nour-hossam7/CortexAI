@@ -43,13 +43,6 @@ def _render_sidebar() -> None:
         st.markdown("---")
         st.caption(MEDICAL_DISCLAIMER)
 
-        with st.expander("System Status"):
-            paths = get_paths()
-            st.write("SegResNet:", "✅" if paths.segresnet_checkpoint.exists() else "❌")
-            st.write("Fusion model:", "✅" if paths.fusion_checkpoint.exists() else "❌")
-            st.write("BioBERT embeddings:", "✅" if paths.nlp_embeddings_dir.exists() else "❌")
-            st.write("Device:", get_device_name())
-
         info = load_dataset_info()
         pts = info.get("patients", {})
         st.caption(f"Cohort: {pts.get('total', 369)} patients")
