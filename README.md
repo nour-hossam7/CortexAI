@@ -375,6 +375,9 @@ The repository history currently shows these contributors:
 
 - Nour Hossam
 - Mariam Mohamed
+- Ahmed Hossam
+- Ammar Kamal
+- Ibrahim Mahmoud
 
 ## Acknowledgments
 
