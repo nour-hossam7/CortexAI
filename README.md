@@ -394,5 +394,6 @@ The repository history currently shows these contributors:
 
 - GitHub Repository: https://github.com/nour-hossam7/CortexAI
 - Live Demo: https://cortexai.streamlit.app/
+- Video: https://drive.google.com/file/d/1yXMcuygGEFW2V2WrVEosgNyx8mcnV5vU/view?usp=sharing
 
 If you are reviewing the project, start with the live demo above and then return here for the implementation details.
