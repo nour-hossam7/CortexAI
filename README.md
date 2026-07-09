@@ -143,31 +143,31 @@ CortexAI follows a three-branch input architecture that converges in a multimoda
 
 ```mermaid
 flowchart TD
-    A[MRI Input<br/>.pt or 4 NIfTI] --> B[CV Preprocessing<br/>load, crop, scale, normalize]
-    B --> C[SegResNet 3D<br/>Segmentation]
-    C --> D[Segmentation Mask<br/>+ Tumor Statistics]
-    C --> E[256-d Image<br/>Features]
+    A["MRI Input\n.pt or 4 NIfTI"] --> B["CV Preprocessing\nload, crop, scale, normalize"]
+    B --> C["SegResNet 3D\nSegmentation"]
+    C --> D["Segmentation Mask\n+ Tumor Statistics"]
+    C --> E["256-d Image\nFeatures"]
 
-    F[Radiology Report<br/>paste or .txt] --> G[NLP Cleaning<br/>whitespace only]
-    G --> H[BioBERT / ClinicalBERT<br/>Frozen Encoder]
-    H --> I[768-d Text<br/>Embedding]
-    G --> J[Entity Extraction<br/>+ Keyword Features]
+    F["Radiology Report\npaste or .txt"] --> G["NLP Cleaning\nwhitespace only"]
+    G --> H["BioBERT / ClinicalBERT\nFrozen Encoder"]
+    H --> I["768-d Text\nEmbedding"]
+    G --> J["Entity Extraction\n+ Keyword Features"]
 
-    D --> K[Clinical Feature<br/>Engineering]
+    D --> K["Clinical Feature\nEngineering"]
     J --> K
-    K --> L[13+ Clinical<br/>Feature Vector]
+    K --> L["13+ Clinical\nFeature Vector"]
 
-    E --> M[Fusion Encoder<br/>ImageProj + TextProj + FusionBlock]
+    E --> M["Fusion Encoder\nImageProj + TextProj + FusionBlock"]
     I --> M
-    M --> N[256-d Unified<br/>Representation]
+    M --> N["256-d Unified\nRepresentation"]
 
-    L --> O[Decision Head<br/>MLP Classifier]
+    L --> O["Decision Head\nMLP Classifier"]
     N --> O
-    O --> P[Low / Medium / High<br/>Risk Prediction]
+    O --> P["Low / Medium / High\nRisk Prediction"]
 
-    P --> Q[Streamlit Dashboard<br/>8-page UI]
-    P --> R[Explainability<br/>Grad-CAM, SHAP, Similar Patients]
-    P --> S[Export<br/>PDF, PNG, CSV, JSON, NIfTI]
+    P --> Q["Streamlit Dashboard\n8-page UI"]
+    P --> R["Explainability\nGrad-CAM, SHAP, Similar Patients"]
+    P --> S["Export\nPDF, PNG, CSV, JSON, NIfTI"]
 ```
 
 ### Architecture Highlights
@@ -411,15 +411,15 @@ The user workflow is organized across 8 Streamlit pages:
 
 ```mermaid
 flowchart LR
-    A[Home<br/>Dashboard] --> B["1: MRI Analysis<br/>Upload + Segment"]
-    A --> C["2: Clinical Report<br/>NLP Analysis"]
-    B --> D["3: Fusion AI<br/>Risk Prediction"]
+    A["Home\nDashboard"] --> B["1: MRI Analysis\nUpload + Segment"]
+    A --> C["2: Clinical Report\nNLP Analysis"]
+    B --> D["3: Fusion AI\nRisk Prediction"]
     C --> D
-    D --> E["4: Explainability<br/>Grad-CAM, SHAP"]
-    D --> F["5: Analytics<br/>Metrics, Curves"]
-    D --> G["6: Reports<br/>Export Artifacts"]
-    A --> H["7: Settings<br/>Device, Paths"]
-    A --> I["8: About<br/>Architecture"]
+    D --> E["4: Explainability\nGrad-CAM, SHAP"]
+    D --> F["5: Analytics\nMetrics, Curves"]
+    D --> G["6: Reports\nExport Artifacts"]
+    A --> H["7: Settings\nDevice, Paths"]
+    A --> I["8: About\nArchitecture"]
 ```
 
 ### Step-by-Step
@@ -498,12 +498,12 @@ The CV module (`src/cv_module/`) implements a complete BraTS2020 segmentation pi
 
 ```mermaid
 flowchart LR
-    A[NIfTI Volume<br/>4 modalities] --> B[LoadImaged]
-    B --> C[EnsureChannelFirstd]
-    C --> D[MapLabelValue<br/>0,1,2,4 → 0,1,2,3]
-    D --> E[CropForegroundd<br/>based on label]
-    E --> F[ScaleIntensityRangePercentilesd<br/>1-99 percentile, channel-wise]
-    F --> G[NormalizeIntensityd<br/>nonzero, channel-wise]
+    A["NIfTI Volume\n4 modalities"] --> B["Load Images"]
+    B --> C["Channel First"]
+    C --> D["Remap Labels\nto sequential (0-3)"]
+    D --> E["Crop Foreground\nbased on label"]
+    E --> F["Scale Intensities\n1-99% percentile, per channel"]
+    F --> G["Normalize\nnonzero, per channel"]
 ```
 
 **Training augmentations** (applied after preprocessing on serialized `.pt` volumes):
@@ -604,11 +604,11 @@ The NLP encoder can be compressed via Knowledge Distillation — training a ligh
 
 ```mermaid
 flowchart LR
-    T[Teacher<br/>BioBERT / ClinicalBERT<br/>12 layers, ~110M params, frozen] --> TE[768-d Embedding]
-    S[Student<br/>DistilBERT<br/>6 layers, ~67M params, trainable] --> SE[768-d Embedding]
-    TE --> L[Loss<br/>MSE / Cosine / Hybrid]
+    T["Teacher\nBioBERT / ClinicalBERT\n~110M params, frozen"] --> TE[768-d Embedding]
+    S["Student\nDistilBERT\n~67M params, trainable"] --> SE[768-d Embedding]
+    TE --> L["Loss\nMSE / Cosine / Hybrid"]
     SE --> L
-    L --> B[Backpropagation<br/>→ Student only]
+    L --> B["Backpropagation\n→ Student only"]
 ```
 
 Only the student receives gradients — the teacher remains frozen throughout distillation.
@@ -975,18 +975,18 @@ On CPU, the two independent branches run concurrently:
 
 ```mermaid
 flowchart TD
-    A[Input] --> B{torch.cuda.is_available()?}
-    B -->|No (CPU)| C[ThreadPoolExecutor<br/>max_workers=2]
-    B -->|Yes (GPU)| D[Sequential execution<br/>CUDA thread safety]
+    A[Input] --> B{CUDA Available?}
+    B -->|No - CPU| C["CPU Parallel\nExecution"]
+    B -->|Yes - GPU| D["GPU Sequential\nExecution"]
 
-    subgraph CPU_Parallel [CPU — Parallel Branches]
-        C --> E[MRI Branch<br/>predict_mask → extract_image_features]
-        C --> F[NLP Branch<br/>extract_text_features → extract_clinical_entities]
+    subgraph CPU_Parallel ["CPU - Parallel Branches"]
+        C --> E["MRI Branch\nSegmentation + Features"]
+        C --> F["NLP Branch\nEmbedding + Entities"]
     end
 
-    E --> G[Join + compute_tumor_statistics]
+    E --> G["Join + Tumor\nStatistics"]
     F --> G
-    G --> H[Fusion → Explainability → Report]
+    G --> H["Fusion → Explainability → Report"]
 ```
 
 | Condition | Execution Model | Rationale |
