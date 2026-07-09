@@ -12,18 +12,27 @@ Author:
 Nour Hossam
 """
 
+import logging
+
 import numpy as np
 import torch
 import torch.nn.functional as F
 
 from .config import Config
+from .distillation_config import DistillationConfig
 from .model import build_encoder, mean_pooling
 from .preprocessing import clean_report
+from .student_model import build_student_encoder
 
 __all__ = [
     "extract_text_features",
     "extract_text_features_batch",
+    "extract_text_features_student",
+    "extract_text_features_batch_student",
+    "get_encoder_for_inference",
 ]
+
+logger = logging.getLogger(__name__)
 
 
 def extract_text_features(
@@ -152,6 +161,154 @@ def extract_text_features_batch(
             text,
             tokenizer=tokenizer,
             model=model,
+            device=device,
+        )
+        for text in report_texts
+    ]
+
+    return np.asarray(features, dtype=np.float32)
+
+
+def get_encoder_for_inference(
+    use_student: bool | None = None,
+) -> tuple:
+    """
+    Return the appropriate (tokenizer, model, device) tuple for inference.
+
+    When *use_student* is ``True`` (or when ``DistillationConfig.USE_STUDENT_MODEL``
+    is ``True`` and *use_student* is ``None``), the student encoder is
+    loaded; otherwise the teacher encoder is returned.
+
+    This is the recommended way to obtain an encoder when the calling
+    code wants to honour the global ``USE_STUDENT_MODEL`` flag without
+    importing the config itself.
+
+    Parameters
+    ----------
+    use_student : bool | None
+        Explicit override.  When ``None`` (default) the global
+        ``DistillationConfig.USE_STUDENT_MODEL`` flag is checked.
+
+    Returns
+    -------
+    tuple
+        ``(tokenizer, model, device)`` — either a teacher or a student
+        encoder, both in ``eval()`` mode.
+    """
+    if use_student is None:
+        use_student = DistillationConfig.USE_STUDENT_MODEL
+
+    if use_student:
+        logger.info("Using student encoder for inference")
+        return build_student_encoder(freeze=True)
+
+    logger.debug("Using teacher encoder for inference")
+    return build_encoder()
+
+
+def extract_text_features_student(
+    report_text: str,
+    student_model_name: str | None = None,
+    student_tokenizer=None,
+    student_model=None,
+    device: torch.device | None = None,
+) -> np.ndarray:
+    """
+    Extract a fixed-size feature vector using the lightweight student
+    encoder.  Mirrors :func:`extract_text_features` in every respect
+    except that it uses the student model.
+
+    Parameters
+    ----------
+    report_text : str
+        Raw (uncleaned) radiology report text.
+    student_model_name : str | None
+        Defaults to ``DistillationConfig.STUDENT_MODEL_NAME``.
+    student_tokenizer, student_model, device : optional
+        Pre-loaded student components (avoids reloading on every call).
+
+    Returns
+    -------
+    np.ndarray
+        Shape ``(Config.EMBEDDING_DIM,)`` — L2-normalised mean-pooled
+        embedding from the student encoder.
+    """
+    if report_text is None:
+        raise ValueError("report_text cannot be None.")
+
+    report_text = str(report_text)
+
+    if not report_text.strip():
+        raise ValueError("report_text is empty.")
+
+    if student_tokenizer is None or student_model is None:
+        student_tokenizer, student_model, device = build_student_encoder(
+            model_name=student_model_name,
+            freeze=True,
+        )
+    elif device is None:
+        device = next(student_model.parameters()).device
+
+    cleaned = clean_report(report_text)
+
+    encoded = student_tokenizer(
+        cleaned,
+        max_length=Config.MAX_LENGTH,
+        truncation=True,
+        padding="max_length",
+        return_tensors="pt",
+    )
+
+    encoded = {k: v.to(device) for k, v in encoded.items()}
+
+    with torch.no_grad():
+        outputs = student_model(**encoded)
+        pooled = mean_pooling(outputs, encoded["attention_mask"])
+
+    pooled = pooled.squeeze()
+    pooled = F.normalize(pooled, p=2, dim=0)
+
+    return pooled.cpu().numpy().astype(np.float32)
+
+
+def extract_text_features_batch_student(
+    report_texts: list[str],
+    student_model_name: str | None = None,
+) -> np.ndarray:
+    """
+    Batch feature extraction using the student encoder.
+
+    Convenience wrapper around :func:`extract_text_features_student`
+    that loads the student model once and processes all texts.
+
+    Parameters
+    ----------
+    report_texts : list[str]
+        Raw radiology report texts.
+    student_model_name : str | None
+        Defaults to ``DistillationConfig.STUDENT_MODEL_NAME``.
+
+    Returns
+    -------
+    np.ndarray
+        Shape ``(len(report_texts), Config.EMBEDDING_DIM)``.
+    """
+    if len(report_texts) == 0:
+        return np.empty(
+            (0, Config.EMBEDDING_DIM),
+            dtype=np.float32,
+        )
+
+    student_tokenizer, student_model, device = build_student_encoder(
+        model_name=student_model_name,
+        freeze=True,
+    )
+
+    features = [
+        extract_text_features_student(
+            text,
+            student_tokenizer=student_tokenizer,
+            student_model=student_model,
             device=device,
         )
         for text in report_texts

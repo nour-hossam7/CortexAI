@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -39,6 +40,33 @@ class PipelineCallbacks:
     on_log: Callable[[str], None] | None = None
 
 
+def _mri_branch(
+    model: torch.nn.Module,
+    image: torch.Tensor,
+    device: torch.device,
+) -> tuple[torch.Tensor, np.ndarray]:
+    sample = {"image": image}
+    mask = predict_mask(model, sample, remap_to_brats=False)
+    img_feat = extract_image_features(model, image.unsqueeze(0), device)
+    return mask, img_feat
+
+
+def _nlp_branch(
+    report_text: str,
+    tokenizer,
+    enc_model,
+    enc_device,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    text_feat = extract_text_features(
+        report_text,
+        tokenizer=tokenizer,
+        model=enc_model,
+        device=enc_device,
+    )
+    entities = extract_clinical_entities(report_text)
+    return text_feat, entities
+
+
 def run_full_analysis(
     mri_bundle: dict[str, Any],
     report_text: str,
@@ -66,27 +94,36 @@ def run_full_analysis(
     spacing = tuple(mri_bundle.get("spacing_mm", (1.0, 1.0, 1.0)))
 
     stage("Preprocessing", 0.12)
-    sample = {"image": image}
     device = next(get_segresnet().parameters()).device
 
     stage("Segmentation", 0.25)
     model = get_segresnet()
-    mask = predict_mask(model, sample, remap_to_brats=False)
-    stats = compute_tumor_statistics(mask, spacing_mm=spacing, patient_id=patient_id)
+    # Pre-load BioBERT from the main thread (avoids Streamlit cache in worker threads)
+    tokenizer, enc_model, enc_device = get_biobert_encoder()
+
+    if torch.cuda.is_available():
+        log("GPU mode — sequential inference (CUDA not thread-safe)")
+        mask = predict_mask(model, {"image": image}, remap_to_brats=False)
+        img_feat = extract_image_features(model, image.unsqueeze(0), device)
+        text_feat = extract_text_features(
+            report_text,
+            tokenizer=tokenizer,
+            model=enc_model,
+            device=enc_device,
+        )
+        entities = extract_clinical_entities(report_text)
+    else:
+        log("CPU mode — parallelizing MRI and NLP inference")
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            mri_future = executor.submit(_mri_branch, model, image, device)
+            nlp_future = executor.submit(_nlp_branch, report_text, tokenizer, enc_model, enc_device)
+            mask, img_feat = mri_future.result()
+            text_feat, entities = nlp_future.result()
 
     stage("Extracting Image Features", 0.38)
-    img_feat = extract_image_features(model, image.unsqueeze(0), device)
-
     stage("ClinicalBERT Analysis", 0.52)
-    tokenizer, enc_model, enc_device = get_biobert_encoder()
-    text_feat = extract_text_features(
-        report_text,
-        tokenizer=tokenizer,
-        model=enc_model,
-        device=enc_device,
-    )
-    entities = extract_clinical_entities(report_text)
 
+    stats = compute_tumor_statistics(mask, spacing_mm=spacing, patient_id=patient_id)
     clinical_row = _build_clinical_row(report_text, stats)
     fusion_result = None
     unified_repr = None
